@@ -1,11 +1,11 @@
 import { Container, Group, Text, UnstyledButton } from '@mantine/core';
 import { IconViewfinder } from '@tabler/icons-react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 export function NavigationBar() {
   return (
     <Container size="lg" h="100%">
-      <Group h="100%" justify="space-between">
+      <Group h="100%">
         <UnstyledButton component={Link} to="/">
           <Group gap={8}>
             <IconViewfinder size={26} color="var(--mantine-color-violet-6)" />
@@ -14,19 +14,6 @@ export function NavigationBar() {
             </Text>
           </Group>
         </UnstyledButton>
-
-        <Group gap="lg">
-          <Text
-            component={NavLink}
-            to="/projects"
-            size="sm"
-            fw={500}
-            c="dimmed"
-            style={{ textDecoration: 'none' }}
-          >
-            Projects
-          </Text>
-        </Group>
       </Group>
     </Container>
   );
