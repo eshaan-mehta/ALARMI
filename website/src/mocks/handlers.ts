@@ -1,5 +1,6 @@
 import { http, HttpResponse, delay } from 'msw';
 import { db } from './db';
+import type { DesignPatch } from '../features/designs/types';
 
 const BASE = '*/api'; // matches whatever origin/baseURL the client uses
 
@@ -77,6 +78,17 @@ export const handlers = [
     const design = db.getDesign(String(params.designId));
     if (!design) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
     return HttpResponse.json(design);
+  }),
+
+  http.patch(`${BASE}/designs/:designId`, async ({ request, params }) => {
+    await delay(LATENCY);
+    const patch = (await request.json()) as DesignPatch;
+    if (patch.name !== undefined && patch.name.trim().length === 0) {
+      return HttpResponse.json({ message: 'Design name is required.' }, { status: 400 });
+    }
+    const updated = db.updateDesign(String(params.designId), patch);
+    if (!updated) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return HttpResponse.json(updated);
   }),
 
   http.delete(`${BASE}/designs/:designId`, async ({ params }) => {

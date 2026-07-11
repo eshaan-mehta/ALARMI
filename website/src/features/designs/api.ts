@@ -1,6 +1,6 @@
 import type { AxiosProgressEvent } from 'axios';
 import { http } from '../../lib/api/http';
-import type { Design, ProcessingStatus } from './types';
+import type { Design, DesignPatch, ProcessingStatus } from './types';
 
 /** GET /api/designs/project_designs/{project_name} */
 export async function getProjectDesigns(projectName: string): Promise<Design[]> {
@@ -54,6 +54,15 @@ export async function uploadDesign({
       },
     },
   );
+  return data;
+}
+
+/** PATCH /api/designs/{designId} — rename and/or edit metadata */
+export async function updateDesign(
+  designId: string,
+  patch: DesignPatch,
+): Promise<Design> {
+  const { data } = await http.patch<Design>(`/designs/${designId}`, patch);
   return data;
 }
 

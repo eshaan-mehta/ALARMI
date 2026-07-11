@@ -24,3 +24,11 @@ export interface Design {
   roomId?: string;
   unitScale?: string;
 }
+
+/** Fields the user may edit on a design (rename + metadata). */
+export type DesignPatch = Partial<
+  Pick<
+    Design,
+    'name' | 'moduleType' | 'dimensions' | 'anchorCount' | 'roomId' | 'unitScale'
+  >
+>;

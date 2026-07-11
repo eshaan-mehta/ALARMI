@@ -8,12 +8,14 @@ import {
   Text,
   ThemeIcon,
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconDots, IconFile3d, IconTrash } from '@tabler/icons-react';
+import { IconDots, IconFile3d, IconPencil, IconTrash } from '@tabler/icons-react';
 import { formatBytes, formatDate } from '../../../lib/format';
 import { useDeleteDesign } from '../hooks';
 import type { Design } from '../types';
+import { EditDesignModal } from './EditDesignModal';
 import { StatusBadge } from './StatusBadge';
 
 interface Props {
@@ -36,6 +38,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 
 export function DesignCard({ design, projectName }: Props) {
   const del = useDeleteDesign(projectName);
+  const [editOpened, editModal] = useDisclosure(false);
 
   const confirmDelete = () =>
     modals.openConfirmModal({
@@ -63,7 +66,8 @@ export function DesignCard({ design, projectName }: Props) {
   const isReady = design.status === 'COMPLETE';
 
   return (
-    <Card withBorder padding="lg" radius="md">
+    <>
+      <Card withBorder padding="lg" radius="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <Group gap="sm" wrap="nowrap">
           <ThemeIcon size={40} radius="md" variant="light">
@@ -86,6 +90,13 @@ export function DesignCard({ design, projectName }: Props) {
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item
+              leftSection={<IconPencil size={16} />}
+              onClick={editModal.open}
+            >
+              Edit
+            </Menu.Item>
+            <Menu.Divider />
             <Menu.Item
               color="red"
               leftSection={<IconTrash size={16} />}
@@ -124,6 +135,14 @@ export function DesignCard({ design, projectName }: Props) {
           </Stack>
         </>
       )}
-    </Card>
+      </Card>
+
+      <EditDesignModal
+        design={design}
+        projectName={projectName}
+        opened={editOpened}
+        onClose={editModal.close}
+      />
+    </>
   );
 }

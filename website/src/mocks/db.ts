@@ -1,4 +1,4 @@
-import type { Design, ProcessingStatus } from '../features/designs/types';
+import type { Design, DesignPatch, ProcessingStatus } from '../features/designs/types';
 import type { Project } from '../features/projects/types';
 
 /**
@@ -58,10 +58,14 @@ function projectView(p: Project): Project {
   return { ...p, designCount: count };
 }
 
-/** Design as returned to clients, with status/metadata derived from elapsed time. */
+/**
+ * Design as returned to clients. Status is derived from elapsed time. Metadata
+ * defaults to the generated values once COMPLETE, but any field the user has
+ * edited (stored on the record) overrides the generated default.
+ */
 function designView(d: StoredDesign): Design {
   const status = statusFor(d.startedAt);
-  const meta = status === 'COMPLETE' ? completedMetadata(d.fileSize) : {};
+  const base = status === 'COMPLETE' ? completedMetadata(d.fileSize) : {};
   return {
     designId: d.designId,
     projectName: d.projectName,
@@ -70,7 +74,11 @@ function designView(d: StoredDesign): Design {
     fileSize: d.fileSize,
     status,
     uploadTime: d.uploadTime,
-    ...meta,
+    moduleType: d.moduleType ?? base.moduleType,
+    dimensions: d.dimensions ?? base.dimensions,
+    anchorCount: d.anchorCount ?? base.anchorCount,
+    roomId: d.roomId ?? base.roomId,
+    unitScale: d.unitScale ?? base.unitScale,
   };
 }
 
@@ -138,6 +146,18 @@ export const db = {
     };
     designs.set(stored.designId, stored);
     return designView(stored);
+  },
+
+  updateDesign(designId: string, patch: DesignPatch): Design | undefined {
+    const d = designs.get(designId);
+    if (!d) return undefined;
+    if (patch.name !== undefined) d.name = patch.name;
+    if (patch.moduleType !== undefined) d.moduleType = patch.moduleType;
+    if (patch.dimensions !== undefined) d.dimensions = patch.dimensions;
+    if (patch.anchorCount !== undefined) d.anchorCount = patch.anchorCount;
+    if (patch.roomId !== undefined) d.roomId = patch.roomId;
+    if (patch.unitScale !== undefined) d.unitScale = patch.unitScale;
+    return designView(d);
   },
 
   deleteDesign(designId: string): boolean {

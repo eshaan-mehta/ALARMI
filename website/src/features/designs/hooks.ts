@@ -3,9 +3,11 @@ import { queryKeys } from '../../lib/api/queryKeys';
 import {
   deleteDesign,
   getProjectDesigns,
+  updateDesign,
   uploadDesign,
   type UploadDesignArgs,
 } from './api';
+import type { DesignPatch } from './types';
 
 /**
  * Lists a project's designs and auto-polls every 2s while any design is still
@@ -33,6 +35,16 @@ export function useUploadDesign(projectName: string) {
       qc.invalidateQueries({ queryKey: queryKeys.projectDesigns(projectName) });
       qc.invalidateQueries({ queryKey: queryKeys.projects });
     },
+  });
+}
+
+export function useUpdateDesign(projectName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ designId, patch }: { designId: string; patch: DesignPatch }) =>
+      updateDesign(designId, patch),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.projectDesigns(projectName) }),
   });
 }
 
