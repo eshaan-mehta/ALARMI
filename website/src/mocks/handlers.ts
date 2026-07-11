@@ -1,0 +1,88 @@
+import { http, HttpResponse, delay } from 'msw';
+import { db } from './db';
+
+const BASE = '*/api'; // matches whatever origin/baseURL the client uses
+
+/** Simulated network latency for realism. */
+const LATENCY = 400;
+
+export const handlers = [
+  // ---- Projects ----
+  http.get(`${BASE}/projects/all_projects`, async () => {
+    await delay(LATENCY);
+    return HttpResponse.json(db.listProjects());
+  }),
+
+  http.post(`${BASE}/projects`, async ({ request }) => {
+    await delay(LATENCY);
+    const body = (await request.json()) as { name?: string };
+    const name = body.name?.trim();
+    if (!name) {
+      return HttpResponse.json({ message: 'Project name is required.' }, { status: 400 });
+    }
+    if (db.hasProject(name)) {
+      return HttpResponse.json({ message: 'A project with that name already exists.' }, { status: 409 });
+    }
+    return HttpResponse.json(db.createProject(name), { status: 201 });
+  }),
+
+  http.patch(`${BASE}/projects/:projectName`, async ({ request, params }) => {
+    await delay(LATENCY);
+    const body = (await request.json()) as { new_name?: string };
+    const newName = body.new_name?.trim();
+    if (!newName) {
+      return HttpResponse.json({ message: 'new_name is required.' }, { status: 400 });
+    }
+    const updated = db.renameProject(String(params.projectName), newName);
+    if (!updated) return HttpResponse.json({ message: 'Project not found.' }, { status: 404 });
+    return HttpResponse.json(updated);
+  }),
+
+  // ---- Designs ----
+  http.get(`${BASE}/designs/project_designs/:projectName`, async ({ params }) => {
+    await delay(LATENCY);
+    return HttpResponse.json(db.listDesigns(String(params.projectName)));
+  }),
+
+  http.post(`${BASE}/designs/:projectName`, async ({ request, params }) => {
+    await delay(LATENCY);
+    const form = await request.formData();
+    const file = form.get('file');
+    const name = String(form.get('name') ?? '').trim();
+
+    if (!(file instanceof File)) {
+      return HttpResponse.json({ message: 'A file is required.' }, { status: 400 });
+    }
+    if (!file.name.toLowerCase().endsWith('.ifc')) {
+      return HttpResponse.json({ message: 'Only .ifc files are accepted.' }, { status: 400 });
+    }
+    if (file.size > 1024 ** 3) {
+      return HttpResponse.json({ message: 'File exceeds the 1 GB limit.' }, { status: 400 });
+    }
+    const design = db.createDesign(String(params.projectName), name || file.name, {
+      name: file.name,
+      size: file.size,
+    });
+    return HttpResponse.json(design, { status: 201 });
+  }),
+
+  http.get(`${BASE}/designs/:designId/status`, async ({ params }) => {
+    const status = db.getStatus(String(params.designId));
+    if (!status) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return HttpResponse.json({ status });
+  }),
+
+  http.get(`${BASE}/designs/:designId`, async ({ params }) => {
+    await delay(LATENCY);
+    const design = db.getDesign(String(params.designId));
+    if (!design) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return HttpResponse.json(design);
+  }),
+
+  http.delete(`${BASE}/designs/:designId`, async ({ params }) => {
+    await delay(LATENCY);
+    const ok = db.deleteDesign(String(params.designId));
+    if (!ok) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return new HttpResponse(null, { status: 204 });
+  }),
+];
