@@ -1,6 +1,6 @@
 import { Badge, Loader } from '@mantine/core';
 import { IconCircleCheck, IconClock } from '@tabler/icons-react';
-import type { ProcessingStatus } from '../types';
+import type { ProcessingStatus } from '../data/designs/types';
 
 const config: Record<
   ProcessingStatus,

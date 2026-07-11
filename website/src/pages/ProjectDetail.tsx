@@ -20,9 +20,9 @@ import {
   IconUpload,
 } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
-import { DesignCard } from '../features/designs/components/DesignCard';
-import { UploadModal } from '../features/designs/components/UploadModal';
-import { useProjectDesigns } from '../features/designs/hooks';
+import { DesignCard } from '../components/DesignCard';
+import { UploadModal } from '../components/UploadModal';
+import { useProjectDesigns } from '../data/designs/hooks';
 
 export function ProjectDetail() {
   const { projectName = '' } = useParams();

@@ -13,9 +13,9 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconAlertTriangle, IconFolderPlus, IconPlus } from '@tabler/icons-react';
-import { ProjectCard } from '../features/projects/components/ProjectCard';
-import { CreateProjectModal } from '../features/projects/components/CreateProjectModal';
-import { useProjects } from '../features/projects/hooks';
+import { ProjectCard } from '../components/ProjectCard';
+import { CreateProjectModal } from '../components/CreateProjectModal';
+import { useProjects } from '../data/projects/hooks';
 
 export function ProjectsDashboard() {
   const { data: projects, isLoading, isError, refetch } = useProjects();

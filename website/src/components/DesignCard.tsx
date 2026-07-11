@@ -12,9 +12,9 @@ import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconDots, IconFile3d, IconPencil, IconTrash } from '@tabler/icons-react';
-import { formatBytes, formatDate } from '../../../lib/format';
-import { useDeleteDesign } from '../hooks';
-import type { Design } from '../types';
+import { formatBytes, formatDate } from '../lib/format';
+import { useDeleteDesign } from '../data/designs/hooks';
+import type { Design } from '../data/designs/types';
 import { EditDesignModal } from './EditDesignModal';
 import { StatusBadge } from './StatusBadge';
 

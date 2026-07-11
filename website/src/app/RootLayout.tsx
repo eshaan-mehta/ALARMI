@@ -1,6 +1,6 @@
 import { AppShell } from '@mantine/core';
 import { Outlet } from 'react-router-dom';
-import { NavigationBar } from '../components/layout/NavigationBar';
+import { NavigationBar } from '../components/NavigationBar';
 
 export function RootLayout() {
   return (

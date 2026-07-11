@@ -1,6 +1,6 @@
 import { http, HttpResponse, delay } from 'msw';
 import { db } from './db';
-import type { DesignPatch } from '../features/designs/types';
+import type { DesignPatch } from '../designs/types';
 
 const BASE = '*/api'; // matches whatever origin/baseURL the client uses
 

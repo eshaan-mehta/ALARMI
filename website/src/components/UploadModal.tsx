@@ -18,8 +18,8 @@ import {
   IconX,
 } from '@tabler/icons-react';
 import { isAxiosError } from 'axios';
-import { formatBytes } from '../../../lib/format';
-import { useUploadDesign } from '../hooks';
+import { formatBytes } from '../lib/format';
+import { useUploadDesign } from '../data/designs/hooks';
 
 interface Props {
   projectName: string;

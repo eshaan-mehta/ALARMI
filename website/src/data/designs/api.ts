@@ -1,5 +1,5 @@
 import type { AxiosProgressEvent } from 'axios';
-import { http } from '../../lib/api/http';
+import { http } from '../http';
 import type { Design, DesignPatch, ProcessingStatus } from './types';
 
 /** GET /api/designs/project_designs/{project_name} */

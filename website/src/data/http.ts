@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { env } from '../env';
+import { env } from '../lib/env';
 
 /**
  * Single axios instance. Base URL comes from env (defaults to same-origin /api,

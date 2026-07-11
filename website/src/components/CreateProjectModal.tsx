@@ -3,7 +3,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { useCreateProject } from '../hooks';
+import { useCreateProject } from '../data/projects/hooks';
 
 interface Props {
   opened: boolean;

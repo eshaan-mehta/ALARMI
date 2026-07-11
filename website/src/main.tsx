@@ -14,7 +14,7 @@ import { env } from './lib/env';
 /** Start the in-browser mock backend before rendering (dev only). */
 async function enableMocking() {
   if (!env.useMocks) return;
-  const { worker } = await import('./mocks/browser');
+  const { worker } = await import('./data/mocks/browser');
   await worker.start({ onUnhandledRequest: 'bypass' });
 }
 

@@ -1,8 +1,8 @@
 import { Card, Group, Stack, Text, ThemeIcon } from '@mantine/core';
 import { IconFolder, IconChevronRight } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import { formatDate } from '../../../lib/format';
-import type { Project } from '../types';
+import { formatDate } from '../lib/format';
+import type { Project } from '../data/projects/types';
 
 export function ProjectCard({ project }: { project: Project }) {
   const navigate = useNavigate();

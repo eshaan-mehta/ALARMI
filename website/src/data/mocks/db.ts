@@ -1,5 +1,5 @@
-import type { Design, DesignPatch, ProcessingStatus } from '../features/designs/types';
-import type { Project } from '../features/projects/types';
+import type { Design, DesignPatch, ProcessingStatus } from '../designs/types';
+import type { Project } from '../projects/types';
 
 /**
  * In-memory store backing the MSW mock. Resets on page reload. This exists only

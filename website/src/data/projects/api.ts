@@ -1,4 +1,4 @@
-import { http } from '../../lib/api/http';
+import { http } from '../http';
 import type { Project } from './types';
 
 /** GET /api/projects/all_projects */

@@ -13,8 +13,8 @@ import {
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { isAxiosError } from 'axios';
-import { useUpdateDesign } from '../hooks';
-import type { Design, DesignPatch } from '../types';
+import { useUpdateDesign } from '../data/designs/hooks';
+import type { Design, DesignPatch } from '../data/designs/types';
 
 const MODULE_TYPE_OPTIONS = [
   'Wall Panel',
