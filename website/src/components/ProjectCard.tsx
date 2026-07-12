@@ -3,6 +3,7 @@ import { IconFolder, IconChevronRight } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDate } from '../lib/format';
 import type { Project } from '../data/projects/types';
+import classes from './Card.module.css';
 
 export function ProjectCard({ project }: { project: Project }) {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export function ProjectCard({ project }: { project: Project }) {
       withBorder
       padding="lg"
       radius="md"
+      className={classes.hoverable}
       onClick={() => navigate(`/projects/${encodeURIComponent(project.name)}`)}
       style={{ cursor: 'pointer' }}
       role="button"

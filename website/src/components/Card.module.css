@@ -1,0 +1,13 @@
+.hoverable {
+  transition: box-shadow 150ms ease;
+}
+
+.hoverable:hover {
+  box-shadow: var(--mantine-shadow-md);
+}
+
+/* Still-processing designs read as inactive: desaturated + dimmed. */
+.processing {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}

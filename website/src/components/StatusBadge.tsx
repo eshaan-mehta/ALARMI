@@ -1,14 +1,14 @@
 import { Badge, Loader } from '@mantine/core';
-import { IconCircleCheck, IconClock } from '@tabler/icons-react';
+import { IconAlertCircle, IconCircleCheck } from '@tabler/icons-react';
 import type { ProcessingStatus } from '../data/designs/types';
 
 const config: Record<
   ProcessingStatus,
   { label: string; color: string }
 > = {
-  NONE: { label: 'Queued', color: 'gray' },
-  IN_PROGRESS: { label: 'Processing', color: 'yellow' },
-  COMPLETE: { label: 'Ready', color: 'teal' },
+  PROCESSING: { label: 'Processing', color: 'yellow' },
+  COMPLETE: { label: 'Complete', color: 'teal' },
+  ERROR: { label: 'Errored', color: 'red' },
 };
 
 export function StatusBadge({ status }: { status: ProcessingStatus }) {
@@ -17,10 +17,10 @@ export function StatusBadge({ status }: { status: ProcessingStatus }) {
   const icon =
     status === 'COMPLETE' ? (
       <IconCircleCheck size={14} />
-    ) : status === 'IN_PROGRESS' ? (
-      <Loader size={12} color={color} />
+    ) : status === 'ERROR' ? (
+      <IconAlertCircle size={14} />
     ) : (
-      <IconClock size={14} />
+      <Loader size={12} color={color} />
     );
 
   return (

@@ -7,6 +7,11 @@ export async function getProjectDesigns(projectName: string): Promise<Design[]> 
   const { data } = await http.get<Design[]>(
     `/designs/project_designs/${encodeURIComponent(projectName)}`,
   );
+  // Same guard as getAllProjects: a non-array body means the request didn't
+  // reach the mock/backend, so fail loudly rather than crashing on `.map`.
+  if (!Array.isArray(data)) {
+    throw new Error('Expected an array of designs from /designs/project_designs');
+  }
   return data;
 }
 

@@ -17,15 +17,11 @@ interface StoredDesign extends Design {
 const projects = new Map<string, Project>();
 const designs = new Map<string, StoredDesign>();
 
-// Status timeline (ms since upload): NONE -> IN_PROGRESS -> COMPLETE.
-const IN_PROGRESS_AFTER = 1500;
+// Status timeline (ms since upload): PROCESSING -> COMPLETE.
 const COMPLETE_AFTER = 5000;
 
 function statusFor(startedAt: number): ProcessingStatus {
-  const elapsed = Date.now() - startedAt;
-  if (elapsed < IN_PROGRESS_AFTER) return 'NONE';
-  if (elapsed < COMPLETE_AFTER) return 'IN_PROGRESS';
-  return 'COMPLETE';
+  return Date.now() - startedAt < COMPLETE_AFTER ? 'PROCESSING' : 'COMPLETE';
 }
 
 const MODULE_TYPES = [
@@ -64,7 +60,8 @@ function projectView(p: Project): Project {
  * edited (stored on the record) overrides the generated default.
  */
 function designView(d: StoredDesign): Design {
-  const status = statusFor(d.startedAt);
+  // A stored ERROR is terminal; otherwise status is derived from elapsed time.
+  const status = d.status === 'ERROR' ? 'ERROR' : statusFor(d.startedAt);
   const base = status === 'COMPLETE' ? completedMetadata(d.fileSize) : {};
   return {
     designId: d.designId,
@@ -130,7 +127,8 @@ export const db = {
 
   getStatus(designId: string): ProcessingStatus | undefined {
     const d = designs.get(designId);
-    return d ? statusFor(d.startedAt) : undefined;
+    if (!d) return undefined;
+    return d.status === 'ERROR' ? 'ERROR' : statusFor(d.startedAt);
   },
 
   createDesign(projectName: string, name: string, file: { name: string; size: number }): Design {
@@ -140,7 +138,7 @@ export const db = {
       name,
       fileName: file.name,
       fileSize: file.size,
-      status: 'NONE',
+      status: 'PROCESSING',
       uploadTime: new Date().toISOString(),
       startedAt: Date.now(),
     };
@@ -182,15 +180,28 @@ function seed() {
     uploadTime: new Date(past).toISOString(),
     startedAt: past,
   });
+  // Future startedAt keeps this one in PROCESSING for the whole session (demo).
+  const future = Date.now() + 60 * 60_000;
   designs.set('dsn_seed2', {
     designId: 'dsn_seed2',
     projectName: 'Riverside Modular Clinic',
     name: 'Corridor Utility Panel',
     fileName: 'corridor-utility.ifc',
     fileSize: 18_900_000,
-    status: 'COMPLETE',
-    uploadTime: new Date(past - 5000).toISOString(),
-    startedAt: past - 5000,
+    status: 'PROCESSING',
+    uploadTime: new Date().toISOString(),
+    startedAt: future,
+  });
+  // An upload that failed processing, to exercise the error state.
+  designs.set('dsn_seed3', {
+    designId: 'dsn_seed3',
+    projectName: 'Riverside Modular Clinic',
+    name: 'Nurse Station Wall',
+    fileName: 'nurse-station.ifc',
+    fileSize: 27_300_000,
+    status: 'ERROR',
+    uploadTime: new Date(past - 10_000).toISOString(),
+    startedAt: past - 10_000,
   });
 }
 seed();

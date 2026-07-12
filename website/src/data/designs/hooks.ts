@@ -11,8 +11,8 @@ import type { DesignPatch } from './types';
 
 /**
  * Lists a project's designs and auto-polls every 2s while any design is still
- * processing, so cards flip to COMPLETE on their own. Polling stops once all
- * designs are done.
+ * processing, so cards flip to COMPLETE (or ERROR) on their own. Polling stops
+ * once no design is processing.
  */
 export function useProjectDesigns(projectName: string) {
   return useQuery({
@@ -20,7 +20,7 @@ export function useProjectDesigns(projectName: string) {
     queryFn: () => getProjectDesigns(projectName),
     refetchInterval: (query) => {
       const data = query.state.data;
-      const pending = data?.some((d) => d.status !== 'COMPLETE');
+      const pending = data?.some((d) => d.status === 'PROCESSING');
       return pending ? 2000 : false;
     },
   });

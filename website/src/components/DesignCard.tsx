@@ -3,20 +3,29 @@ import {
   Card,
   Divider,
   Group,
+  Loader,
   Menu,
   Stack,
   Text,
   ThemeIcon,
+  Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconDots, IconFile3d, IconPencil, IconTrash } from '@tabler/icons-react';
-import { formatBytes, formatDate } from '../lib/format';
+import {
+  IconAlertCircle,
+  IconDots,
+  IconFile3d,
+  IconInfoCircle,
+  IconPencil,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useDeleteDesign } from '../data/designs/hooks';
 import type { Design } from '../data/designs/types';
+import { DesignInfoModal } from './DesignInfoModal';
 import { EditDesignModal } from './EditDesignModal';
-import { StatusBadge } from './StatusBadge';
+import classes from './Card.module.css';
 
 interface Props {
   design: Design;
@@ -39,6 +48,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 export function DesignCard({ design, projectName }: Props) {
   const del = useDeleteDesign(projectName);
   const [editOpened, editModal] = useDisclosure(false);
+  const [infoOpened, infoModal] = useDisclosure(false);
 
   const confirmDelete = () =>
     modals.openConfirmModal({
@@ -64,23 +74,37 @@ export function DesignCard({ design, projectName }: Props) {
     });
 
   const isReady = design.status === 'COMPLETE';
+  const isProcessing = design.status === 'PROCESSING';
+  const hasError = design.status === 'ERROR';
 
   return (
     <>
-      <Card withBorder padding="lg" radius="md">
+      <Card
+        withBorder
+        padding="lg"
+        radius="md"
+        className={`${classes.hoverable} ${isProcessing ? classes.processing : ''}`}
+      >
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <Group gap="sm" wrap="nowrap">
-          <ThemeIcon size={40} radius="md" variant="light">
+          <ThemeIcon
+            size={40}
+            radius="md"
+            variant="light"
+            color={hasError ? 'red' : undefined}
+          >
             <IconFile3d size={22} />
           </ThemeIcon>
-          <div>
-            <Text fw={600} lineClamp={1}>
-              {design.name}
-            </Text>
-            <Text size="xs" c="dimmed" lineClamp={1}>
-              {design.fileName}
-            </Text>
-          </div>
+          <Text fw={600} lineClamp={1}>
+            {design.name}
+          </Text>
+          {hasError && (
+            <Tooltip label="Upload failed — open Info for details" withArrow>
+              <ThemeIcon size={20} radius="xl" color="red" variant="light">
+                <IconAlertCircle size={16} />
+              </ThemeIcon>
+            </Tooltip>
+          )}
         </Group>
 
         <Menu position="bottom-end" withinPortal>
@@ -90,6 +114,12 @@ export function DesignCard({ design, projectName }: Props) {
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item
+              leftSection={<IconInfoCircle size={16} />}
+              onClick={infoModal.open}
+            >
+              Info
+            </Menu.Item>
             <Menu.Item
               leftSection={<IconPencil size={16} />}
               onClick={editModal.open}
@@ -108,12 +138,14 @@ export function DesignCard({ design, projectName }: Props) {
         </Menu>
       </Group>
 
-      <Group justify="space-between" mt="md">
-        <StatusBadge status={design.status} />
-        <Text size="xs" c="dimmed">
-          {formatBytes(design.fileSize)} · {formatDate(design.uploadTime)}
-        </Text>
-      </Group>
+      {isProcessing && (
+        <Group gap="xs" mt="md">
+          <Loader size="xs" color="yellow" />
+          <Text size="sm" c="dimmed">
+            Processing…
+          </Text>
+        </Group>
+      )}
 
       {isReady && (
         <>
@@ -142,6 +174,12 @@ export function DesignCard({ design, projectName }: Props) {
         projectName={projectName}
         opened={editOpened}
         onClose={editModal.close}
+      />
+
+      <DesignInfoModal
+        design={design}
+        opened={infoOpened}
+        onClose={infoModal.close}
       />
     </>
   );

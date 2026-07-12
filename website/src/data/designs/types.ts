@@ -1,4 +1,4 @@
-export type ProcessingStatus = 'NONE' | 'IN_PROGRESS' | 'COMPLETE';
+export type ProcessingStatus = 'PROCESSING' | 'COMPLETE' | 'ERROR';
 
 /**
  * A "design" = a user-given name + an uploaded design file (IFC).
