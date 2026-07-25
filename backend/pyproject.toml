@@ -1,0 +1,27 @@
+[project]
+name = "alarmi-backend"
+version = "0.1.0"
+description = "ALARMI backend service — Phase 1: REST API over SQLite"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-multipart>=0.0.9",
+]
+
+# Dev CLI entry points — run with `uv run dev` / `uv run seed` (see cli.py).
+[project.scripts]
+dev = "cli:dev"
+seed = "cli:seed"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Only cli.py needs to ship for the entry points to resolve; the `app` package
+# is imported at runtime from the working directory (backend/).
+[tool.hatch.build.targets.wheel]
+packages = ["cli.py"]
