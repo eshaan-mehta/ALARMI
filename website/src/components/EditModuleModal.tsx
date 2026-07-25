@@ -114,7 +114,6 @@ export function EditModuleModal({ module, designId, opened, onClose }: Props) {
             label="Type"
             data={MODULE_TYPE_OPTIONS}
             searchable
-            data-autofocus
             {...form.getInputProps('type')}
           />
           <Group grow>
