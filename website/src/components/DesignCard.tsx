@@ -131,7 +131,7 @@ export function DesignCard({ design, projectId }: Props) {
     });
 
   const isProcessing = design.status === 'PROCESSING';
-  const moduleCount = design.modules.length;
+  const moduleCount = design.moduleCount;
   // Only COMPLETE designs with extracted modules can be expanded.
   const expandable = design.status === 'COMPLETE' && moduleCount > 0;
 

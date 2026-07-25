@@ -40,7 +40,7 @@ export function DesignInfoModal({ design, opened, onClose }: Props) {
           <StatusBadge status={design.status} />
         </Group>
         <InfoRow label="Uploaded" value={formatDate(design.uploadTime)} />
-        <InfoRow label="Modules" value={String(design.modules.length)} />
+        <InfoRow label="Modules" value={String(design.moduleCount)} />
         <InfoRow label="Design ID" value={design.designId} />
       </Stack>
     </Modal>

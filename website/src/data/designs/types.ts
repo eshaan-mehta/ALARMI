@@ -33,6 +33,12 @@ export interface Design {
   status: ProcessingStatus;
   /** ISO timestamp. */
   uploadTime: string;
+  /**
+   * Number of modules extracted (0 until status === COMPLETE). Always sent, even
+   * if a future lazy-load variant stops embedding the full `modules` array — so
+   * the UI can show the count without the payload. See [[alarmi-web-api-decisions]].
+   */
+  moduleCount: number;
   /** Modules extracted from the file. Empty until status === COMPLETE. */
   modules: Module[];
 }

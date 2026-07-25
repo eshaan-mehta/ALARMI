@@ -25,7 +25,8 @@ const nextDesignId = () => `dsn_${++designSeq}`;
 let moduleSeq = 1000;
 const nextModuleId = () => `mod_${++moduleSeq}`;
 
-interface StoredDesign extends Design {
+// moduleCount is derived (from modules.length) in designView, so it isn't stored.
+interface StoredDesign extends Omit<Design, 'moduleCount'> {
   /** Epoch ms when the upload started, used to derive processing status. */
   startedAt: number;
 }
@@ -95,6 +96,9 @@ function designView(d: StoredDesign): Design {
     fileSize: d.fileSize,
     status,
     uploadTime: d.uploadTime,
+    // Count reflects only what's exposed: modules appear once COMPLETE. Eager
+    // mode ships the array too; a future lazy variant could drop it and keep this.
+    moduleCount: status === 'COMPLETE' ? d.modules.length : 0,
     modules: status === 'COMPLETE' ? d.modules : [],
   };
 }

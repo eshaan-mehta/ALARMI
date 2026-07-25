@@ -1,6 +1,6 @@
 import type { AxiosProgressEvent } from 'axios';
 import { http } from '../http';
-import type { Design, DesignPatch, Module, ModulePatch, ProcessingStatus } from './types';
+import type { Design, DesignPatch, Module, ModulePatch } from './types';
 
 /** GET /api/projects/{projectId}/designs */
 export async function getProjectDesigns(projectId: string): Promise<Design[]> {
@@ -13,20 +13,6 @@ export async function getProjectDesigns(projectId: string): Promise<Design[]> {
     throw new Error('Expected an array of designs from /projects/{projectId}/designs');
   }
   return data;
-}
-
-/** GET /api/designs/{designId} */
-export async function getDesign(designId: string): Promise<Design> {
-  const { data } = await http.get<Design>(`/designs/${designId}`);
-  return data;
-}
-
-/** GET /api/designs/{designId}/status */
-export async function getDesignStatus(designId: string): Promise<ProcessingStatus> {
-  const { data } = await http.get<{ status: ProcessingStatus }>(
-    `/designs/${designId}/status`,
-  );
-  return data.status;
 }
 
 export interface UploadDesignArgs {
