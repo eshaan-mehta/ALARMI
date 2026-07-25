@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./alarmi.db"
     app_env: str = "local"
 
-    # Origins allowed to call the API from a browser (the Vite dev server).
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    # Explicit browser origins allowed to call the API (used for real deploys —
+    # set via env in Azure).
+    cors_origins: list[str] = []
+
+    # Dev convenience: allow the Vite server on any local port (5173, 5174, …)
+    # over either localhost or 127.0.0.1, so a shifted port doesn't break CORS.
+    cors_origin_regex: str = r"http://(localhost|127\.0\.0\.1):\d+"
 
 
 settings = Settings()

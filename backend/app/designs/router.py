@@ -16,6 +16,9 @@ _ONE_GB = 1024**3
 
 @router.get("/projects/{project_id}/designs", response_model=list[DesignOut])
 def list_designs(project_id: str, db: Session = Depends(get_db)):
+    # Distinguish an unknown/deleted project from a real but empty one.
+    if not repo.project_exists(db, project_id):
+        raise ApiError(404, "Project not found.")
     return repo.list_designs(db, project_id)
 
 
@@ -34,6 +37,8 @@ def upload_design(
     if not filename.lower().endswith(".ifc"):
         raise ApiError(400, "Only .ifc files are accepted.")
     size = file.size or 0
+    if size == 0:
+        raise ApiError(400, "The file is empty.")
     if size > _ONE_GB:
         raise ApiError(400, "File exceeds the 1 GB limit.")
 

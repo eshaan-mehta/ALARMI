@@ -41,4 +41,21 @@ uv run dev --reset --seed   # wipe the DB, re-seed, then run (clean slate)
 
 No `.env` needed for local dev — copy `.env.example` only to override.
 
+## Tests
+
+```bash
+uv sync --group dev
+uv run pytest                  # unit + endpoint + end-to-end
+uv run pytest -m "not live"    # skip the tests that spawn a real uvicorn process
+uv run pytest tests/spec -rxX  # spec surface not built yet (all xfail)
+```
+
+Tests are written against the design document and the web client's contract, so
+a failure means the implementation disagrees with the spec — not that the test
+needs adjusting. See [`tests/README.md`](tests/README.md) for where each rule
+comes from and which open product decisions the suite takes a position on.
+
+Everything runs against a throwaway SQLite file in a temp dir; `backend/alarmi.db`
+is never touched.
+
 

@@ -32,6 +32,10 @@ def to_design_out(db: Session, d: Design) -> DesignOut:
     )
 
 
+def project_exists(db: Session, project_id: str) -> bool:
+    return db.get(Project, project_id) is not None
+
+
 def list_designs(db: Session, project_id: str) -> list[DesignOut]:
     rows = db.scalars(
         select(Design)

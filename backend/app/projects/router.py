@@ -32,6 +32,10 @@ def rename_project(project_id: str, body: ProjectRename, db: Session = Depends(g
     new_name = (body.new_name or "").strip()
     if not new_name:
         raise ApiError(400, "new_name is required.")
+    if not repo.project_exists(db, project_id):
+        raise ApiError(404, "Project not found.")
+    if repo.name_taken_by_other(db, new_name, project_id):
+        raise ApiError(409, "A project with that name already exists.")
     updated = repo.rename_project(db, project_id, new_name)
     if updated is None:
         raise ApiError(404, "Project not found.")

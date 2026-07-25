@@ -28,8 +28,28 @@ def list_projects(db: Session) -> list[ProjectOut]:
     return [to_project_out(db, p) for p in rows]
 
 
+def _by_name(db: Session, name: str) -> Project | None:
+    """Look a project up by display name, the way a person reads it: case and
+    surrounding whitespace don't make it a different project. SQLite compares
+    strings byte-exactly, so the normalisation has to be explicit here."""
+    return db.scalar(
+        select(Project).where(func.lower(Project.name) == name.strip().lower())
+    )
+
+
 def project_name_exists(db: Session, name: str) -> bool:
-    return db.scalar(select(Project).where(Project.name == name)) is not None
+    return _by_name(db, name) is not None
+
+
+def project_exists(db: Session, project_id: str) -> bool:
+    return db.get(Project, project_id) is not None
+
+
+def name_taken_by_other(db: Session, name: str, project_id: str) -> bool:
+    """True if `name` belongs to a different project — so a rename onto it is a
+    conflict (renaming a project to its own current name is fine)."""
+    p = _by_name(db, name)
+    return p is not None and p.project_id != project_id
 
 
 def create_project(db: Session, name: str, location: str) -> ProjectOut:
