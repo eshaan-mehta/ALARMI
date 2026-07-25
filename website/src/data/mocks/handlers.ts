@@ -44,12 +44,12 @@ export const handlers = [
   }),
 
   // ---- Designs ----
-  http.get(`${BASE}/designs/project_designs/:projectId`, async ({ params }) => {
+  http.get(`${BASE}/projects/:projectId/designs`, async ({ params }) => {
     await delay(LATENCY);
     return HttpResponse.json(db.listDesigns(String(params.projectId)));
   }),
 
-  http.post(`${BASE}/designs/:projectId`, async ({ request, params }) => {
+  http.post(`${BASE}/projects/:projectId/designs`, async ({ request, params }) => {
     await delay(LATENCY);
     const form = await request.formData();
     const file = form.get('file');
@@ -78,6 +78,14 @@ export const handlers = [
     const status = db.getStatus(String(params.designId));
     if (!status) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
     return HttpResponse.json({ status });
+  }),
+
+  // Lazy load: a design's modules are fetched only when its row is expanded.
+  http.get(`${BASE}/designs/:designId/modules`, async ({ params }) => {
+    await delay(LATENCY);
+    const modules = db.listModules(String(params.designId));
+    if (!modules) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return HttpResponse.json(modules);
   }),
 
   http.get(`${BASE}/designs/:designId`, async ({ params }) => {

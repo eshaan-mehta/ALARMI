@@ -22,9 +22,35 @@ const MODULE_TYPE_OPTIONS = [
 ];
 const UNIT_SCALE_OPTIONS = ['METRE', 'MILLIMETRE', 'CENTIMETRE', 'FOOT', 'INCH'];
 
+/** Metres per 1 of each unit — the basis for converting dimensions between units. */
+const METRES_PER_UNIT: Record<string, number> = {
+  METRE: 1,
+  MILLIMETRE: 0.001,
+  CENTIMETRE: 0.01,
+  FOOT: 0.3048,
+  INCH: 0.0254,
+};
+
+/** Short label shown in each dimension field's bracket, e.g. "Width x (cm)". */
+const UNIT_ABBR: Record<string, string> = {
+  METRE: 'm',
+  MILLIMETRE: 'mm',
+  CENTIMETRE: 'cm',
+  FOOT: 'ft',
+  INCH: 'in',
+};
+
+/** Convert a length from one unit to another; trims float noise to 4 decimals. */
+function convertLength(value: number, from: string, to: string): number {
+  const f = METRES_PER_UNIT[from];
+  const t = METRES_PER_UNIT[to];
+  if (!f || !t) return value;
+  return Math.round((value * f) / t * 1e4) / 1e4;
+}
+
 interface Props {
   module: Module;
-  projectId: string;
+  designId: string;
   opened: boolean;
   onClose: () => void;
 }
@@ -49,8 +75,8 @@ function valuesFromModule(m: Module): FormValues {
   };
 }
 
-export function EditModuleModal({ module, projectId, opened, onClose }: Props) {
-  const update = useUpdateModule(projectId);
+export function EditModuleModal({ module, designId, opened, onClose }: Props) {
+  const update = useUpdateModule(designId);
 
   const form = useForm<FormValues>({
     initialValues: valuesFromModule(module),
@@ -65,6 +91,25 @@ export function EditModuleModal({ module, projectId, opened, onClose }: Props) {
   const handleClose = () => {
     if (update.isPending) return;
     onClose();
+  };
+
+  const unitAbbr = UNIT_ABBR[form.values.unitScale] ?? '';
+
+  // Switching units re-scales the current dimension values (frontend only) and
+  // relabels the fields; the chosen unit + converted values are what get saved.
+  const handleUnitChange = (next: string | null) => {
+    if (!next) return;
+    const prev = form.values.unitScale;
+    if (prev && next !== prev) {
+      form.setValues({
+        unitScale: next,
+        dimX: convertLength(Number(form.values.dimX) || 0, prev, next),
+        dimY: convertLength(Number(form.values.dimY) || 0, prev, next),
+        dimZ: convertLength(Number(form.values.dimZ) || 0, prev, next),
+      });
+    } else {
+      form.setFieldValue('unitScale', next);
+    }
   };
 
   const handleSubmit = form.onSubmit((values) => {
@@ -114,29 +159,28 @@ export function EditModuleModal({ module, projectId, opened, onClose }: Props) {
             label="Type"
             data={MODULE_TYPE_OPTIONS}
             searchable
-            data-autofocus
             {...form.getInputProps('type')}
           />
           <Group grow>
             <NumberInput
-              label="Width x (m)"
+              label={`Width x (${unitAbbr})`}
               min={0}
               step={0.1}
-              decimalScale={2}
+              decimalScale={4}
               {...form.getInputProps('dimX')}
             />
             <NumberInput
-              label="Height y (m)"
+              label={`Height y (${unitAbbr})`}
               min={0}
               step={0.1}
-              decimalScale={2}
+              decimalScale={4}
               {...form.getInputProps('dimY')}
             />
             <NumberInput
-              label="Depth z (m)"
+              label={`Depth z (${unitAbbr})`}
               min={0}
               step={0.1}
-              decimalScale={2}
+              decimalScale={4}
               {...form.getInputProps('dimZ')}
             />
           </Group>
@@ -145,7 +189,10 @@ export function EditModuleModal({ module, projectId, opened, onClose }: Props) {
             <Select
               label="Unit scale"
               data={UNIT_SCALE_OPTIONS}
-              {...form.getInputProps('unitScale')}
+              allowDeselect={false}
+              value={form.values.unitScale}
+              onChange={handleUnitChange}
+              error={form.errors.unitScale}
             />
           </Group>
 

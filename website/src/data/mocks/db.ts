@@ -25,9 +25,14 @@ const nextDesignId = () => `dsn_${++designSeq}`;
 let moduleSeq = 1000;
 const nextModuleId = () => `mod_${++moduleSeq}`;
 
-interface StoredDesign extends Design {
+// A Design is now pure metadata (moduleCount only). Storage additionally holds
+// the module array — the source of truth served lazily via db.listModules — and
+// the upload timestamp used to derive status.
+interface StoredDesign extends Omit<Design, 'moduleCount'> {
   /** Epoch ms when the upload started, used to derive processing status. */
   startedAt: number;
+  /** Extracted modules, kept server-side and fetched per design on demand. */
+  modules: Module[];
 }
 
 /** Keyed by projectId. */
@@ -81,8 +86,9 @@ function projectView(p: Project): Project {
 }
 
 /**
- * Design as returned to clients. Status is derived from elapsed time. The
- * extracted modules are surfaced only once processing is COMPLETE.
+ * Design as returned to clients — metadata only. Status is derived from elapsed
+ * time; the module count is exposed once processing is COMPLETE, but the modules
+ * themselves are never embedded here (lazy load — see db.listModules).
  */
 function designView(d: StoredDesign): Design {
   // A stored ERROR is terminal; otherwise status is derived from elapsed time.
@@ -95,7 +101,7 @@ function designView(d: StoredDesign): Design {
     fileSize: d.fileSize,
     status,
     uploadTime: d.uploadTime,
-    modules: status === 'COMPLETE' ? d.modules : [],
+    moduleCount: status === 'COMPLETE' ? d.modules.length : 0,
   };
 }
 
@@ -153,6 +159,18 @@ export const db = {
     const d = designs.get(designId);
     if (!d) return undefined;
     return d.status === 'ERROR' ? 'ERROR' : statusFor(d.startedAt);
+  },
+
+  /**
+   * Modules for one design — the lazy-load path. Returns the array only once the
+   * design is COMPLETE (empty while still processing), or undefined if the design
+   * doesn't exist so the handler can 404.
+   */
+  listModules(designId: string): Module[] | undefined {
+    const d = designs.get(designId);
+    if (!d) return undefined;
+    const status = d.status === 'ERROR' ? 'ERROR' : statusFor(d.startedAt);
+    return status === 'COMPLETE' ? d.modules : [];
   },
 
   createDesign(

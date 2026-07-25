@@ -1,32 +1,18 @@
 import type { AxiosProgressEvent } from 'axios';
 import { http } from '../http';
-import type { Design, DesignPatch, Module, ModulePatch, ProcessingStatus } from './types';
+import type { Design, DesignPatch, Module, ModulePatch } from './types';
 
-/** GET /api/designs/project_designs/{projectId} */
+/** GET /api/projects/{projectId}/designs */
 export async function getProjectDesigns(projectId: string): Promise<Design[]> {
   const { data } = await http.get<Design[]>(
-    `/designs/project_designs/${projectId}`,
+    `/projects/${projectId}/designs`,
   );
   // Same guard as getAllProjects: a non-array body means the request didn't
   // reach the mock/backend, so fail loudly rather than crashing on `.map`.
   if (!Array.isArray(data)) {
-    throw new Error('Expected an array of designs from /designs/project_designs');
+    throw new Error('Expected an array of designs from /projects/{projectId}/designs');
   }
   return data;
-}
-
-/** GET /api/designs/{designId} */
-export async function getDesign(designId: string): Promise<Design> {
-  const { data } = await http.get<Design>(`/designs/${designId}`);
-  return data;
-}
-
-/** GET /api/designs/{designId}/status */
-export async function getDesignStatus(designId: string): Promise<ProcessingStatus> {
-  const { data } = await http.get<{ status: ProcessingStatus }>(
-    `/designs/${designId}/status`,
-  );
-  return data.status;
 }
 
 export interface UploadDesignArgs {
@@ -37,7 +23,7 @@ export interface UploadDesignArgs {
   onProgress?: (percent: number) => void;
 }
 
-/** POST /api/designs/{projectId} — multipart { name, file } */
+/** POST /api/projects/{projectId}/designs — multipart { name, file } */
 export async function uploadDesign({
   projectId,
   name,
@@ -49,7 +35,7 @@ export async function uploadDesign({
   form.append('file', file);
 
   const { data } = await http.post<Design>(
-    `/designs/${projectId}`,
+    `/projects/${projectId}/designs`,
     form,
     {
       onUploadProgress: (e: AxiosProgressEvent) => {
@@ -59,6 +45,15 @@ export async function uploadDesign({
       },
     },
   );
+  return data;
+}
+
+/** GET /api/designs/{designId}/modules — a design's modules, fetched lazily. */
+export async function getDesignModules(designId: string): Promise<Module[]> {
+  const { data } = await http.get<Module[]>(`/designs/${designId}/modules`);
+  if (!Array.isArray(data)) {
+    throw new Error('Expected an array of modules from /designs/{designId}/modules');
+  }
   return data;
 }
 

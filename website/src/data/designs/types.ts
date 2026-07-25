@@ -33,8 +33,13 @@ export interface Design {
   status: ProcessingStatus;
   /** ISO timestamp. */
   uploadTime: string;
-  /** Modules extracted from the file. Empty until status === COMPLETE. */
-  modules: Module[];
+  /**
+   * Number of modules extracted (0 until status === COMPLETE). This is all the
+   * list ships — the modules themselves are a separate lazy-loaded resource
+   * (GET /designs/{id}/modules), so a row can show its count without the
+   * payload. See [[alarmi-web-api-decisions]].
+   */
+  moduleCount: number;
 }
 
 /** Design-level edits (rename). */

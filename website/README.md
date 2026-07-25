@@ -66,7 +66,7 @@ public/             # static assets + MSW worker
 |------|------|
 | `/` | Landing |
 | `/projects` | Projects dashboard |
-| `/projects/:projectName` | Project detail (its designs) |
+| `/projects/:projectId` | Project detail (its designs) |
 | `*` | Not found |
 
 ## Data layer
