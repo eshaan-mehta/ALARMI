@@ -80,6 +80,14 @@ export const handlers = [
     return HttpResponse.json({ status });
   }),
 
+  // Lazy load: a design's modules are fetched only when its row is expanded.
+  http.get(`${BASE}/designs/:designId/modules`, async ({ params }) => {
+    await delay(LATENCY);
+    const modules = db.listModules(String(params.designId));
+    if (!modules) return HttpResponse.json({ message: 'Design not found.' }, { status: 404 });
+    return HttpResponse.json(modules);
+  }),
+
   http.get(`${BASE}/designs/:designId`, async ({ params }) => {
     await delay(LATENCY);
     const design = db.getDesign(String(params.designId));

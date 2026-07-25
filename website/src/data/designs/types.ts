@@ -34,13 +34,12 @@ export interface Design {
   /** ISO timestamp. */
   uploadTime: string;
   /**
-   * Number of modules extracted (0 until status === COMPLETE). Always sent, even
-   * if a future lazy-load variant stops embedding the full `modules` array — so
-   * the UI can show the count without the payload. See [[alarmi-web-api-decisions]].
+   * Number of modules extracted (0 until status === COMPLETE). This is all the
+   * list ships — the modules themselves are a separate lazy-loaded resource
+   * (GET /designs/{id}/modules), so a row can show its count without the
+   * payload. See [[alarmi-web-api-decisions]].
    */
   moduleCount: number;
-  /** Modules extracted from the file. Empty until status === COMPLETE. */
-  modules: Module[];
 }
 
 /** Design-level edits (rename). */

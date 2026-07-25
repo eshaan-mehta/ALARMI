@@ -24,7 +24,7 @@ const UNIT_SCALE_OPTIONS = ['METRE', 'MILLIMETRE', 'CENTIMETRE', 'FOOT', 'INCH']
 
 interface Props {
   module: Module;
-  projectId: string;
+  designId: string;
   opened: boolean;
   onClose: () => void;
 }
@@ -49,8 +49,8 @@ function valuesFromModule(m: Module): FormValues {
   };
 }
 
-export function EditModuleModal({ module, projectId, opened, onClose }: Props) {
-  const update = useUpdateModule(projectId);
+export function EditModuleModal({ module, designId, opened, onClose }: Props) {
+  const update = useUpdateModule(designId);
 
   const form = useForm<FormValues>({
     initialValues: valuesFromModule(module),

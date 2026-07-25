@@ -48,6 +48,15 @@ export async function uploadDesign({
   return data;
 }
 
+/** GET /api/designs/{designId}/modules — a design's modules, fetched lazily. */
+export async function getDesignModules(designId: string): Promise<Module[]> {
+  const { data } = await http.get<Module[]>(`/designs/${designId}/modules`);
+  if (!Array.isArray(data)) {
+    throw new Error('Expected an array of modules from /designs/{designId}/modules');
+  }
+  return data;
+}
+
 /** PATCH /api/designs/{designId} — rename a design. */
 export async function updateDesign(
   designId: string,

@@ -5,6 +5,7 @@ import {
   Collapse,
   Divider,
   Group,
+  Loader,
   Menu,
   Paper,
   SimpleGrid,
@@ -24,7 +25,7 @@ import {
   IconPencil,
   IconTrash,
 } from '@tabler/icons-react';
-import { useDeleteDesign } from '../data/designs/hooks';
+import { useDeleteDesign, useDesignModules } from '../data/designs/hooks';
 import type { Design, Module } from '../data/designs/types';
 import { StatusBadge } from './StatusBadge';
 import { DesignInfoModal } from './DesignInfoModal';
@@ -135,6 +136,9 @@ export function DesignCard({ design, projectId }: Props) {
   // Only COMPLETE designs with extracted modules can be expanded.
   const expandable = design.status === 'COMPLETE' && moduleCount > 0;
 
+  // Lazy load: modules are pulled only once the row is actually expanded.
+  const modulesQuery = useDesignModules(design.designId, expandable && expanded);
+
   return (
     <>
       <Card
@@ -228,15 +232,25 @@ export function DesignCard({ design, projectId }: Props) {
         {expandable && (
           <Collapse expanded={expanded}>
             <Divider my="sm" />
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              {design.modules.map((m) => (
-                <ModuleTile
-                  key={m.moduleId}
-                  module={m}
-                  onEdit={() => setEditModule(m)}
-                />
-              ))}
-            </SimpleGrid>
+            {modulesQuery.isError ? (
+              <Text size="sm" c="red" ta="center" py="md">
+                Couldn&apos;t load modules.
+              </Text>
+            ) : modulesQuery.data ? (
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                {modulesQuery.data.map((m) => (
+                  <ModuleTile
+                    key={m.moduleId}
+                    module={m}
+                    onEdit={() => setEditModule(m)}
+                  />
+                ))}
+              </SimpleGrid>
+            ) : (
+              <Group justify="center" py="md">
+                <Loader size="sm" />
+              </Group>
+            )}
           </Collapse>
         )}
       </Card>
@@ -257,7 +271,7 @@ export function DesignCard({ design, projectId }: Props) {
       {editModule && (
         <EditModuleModal
           module={editModule}
-          projectId={projectId}
+          designId={design.designId}
           opened={editModule !== null}
           onClose={() => setEditModule(null)}
         />

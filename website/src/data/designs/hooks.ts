@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
 import {
   deleteDesign,
+  getDesignModules,
   getProjectDesigns,
   updateDesign,
   updateModule,
@@ -24,6 +25,19 @@ export function useProjectDesigns(projectId: string) {
       const pending = data?.some((d) => d.status === 'PROCESSING');
       return pending ? 2000 : false;
     },
+  });
+}
+
+/**
+ * Lazily fetches one design's modules. Stays disabled until `enabled` (the row
+ * is expanded), so the module payload is only pulled when the user opens the
+ * design — then TanStack caches it for subsequent expands.
+ */
+export function useDesignModules(designId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.designModules(designId),
+    queryFn: () => getDesignModules(designId),
+    enabled,
   });
 }
 
@@ -50,14 +64,18 @@ export function useUpdateDesign(projectId: string) {
   });
 }
 
-/** Edit a single module's extracted metadata. */
-export function useUpdateModule(projectId: string) {
+/**
+ * Edit a single module's extracted metadata. Modules live in the per-design
+ * lazy cache, so invalidate that key (not the project's design list — a metadata
+ * edit doesn't change the list or the module count).
+ */
+export function useUpdateModule(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ moduleId, patch }: { moduleId: string; patch: ModulePatch }) =>
       updateModule(moduleId, patch),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.projectDesigns(projectId) }),
+      qc.invalidateQueries({ queryKey: queryKeys.designModules(designId) }),
   });
 }
 
