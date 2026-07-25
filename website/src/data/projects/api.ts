@@ -13,16 +13,21 @@ export async function getAllProjects(): Promise<Project[]> {
   return data;
 }
 
+export interface CreateProjectArgs {
+  name: string;
+  location: string;
+}
+
 /** POST /api/projects */
-export async function createProject(name: string): Promise<Project> {
-  const { data } = await http.post<Project>('/projects', { name });
+export async function createProject({ name, location }: CreateProjectArgs): Promise<Project> {
+  const { data } = await http.post<Project>('/projects', { name, location });
   return data;
 }
 
-/** PATCH /api/projects/{project_name} */
-export async function renameProject(name: string, newName: string): Promise<Project> {
+/** PATCH /api/projects/{projectId} */
+export async function renameProject(projectId: string, newName: string): Promise<Project> {
   const { data } = await http.patch<Project>(
-    `/projects/${encodeURIComponent(name)}`,
+    `/projects/${projectId}`,
     { new_name: newName },
   );
   return data;

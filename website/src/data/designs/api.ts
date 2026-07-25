@@ -1,11 +1,11 @@
 import type { AxiosProgressEvent } from 'axios';
 import { http } from '../http';
-import type { Design, DesignPatch, ProcessingStatus } from './types';
+import type { Design, DesignPatch, Module, ModulePatch, ProcessingStatus } from './types';
 
-/** GET /api/designs/project_designs/{project_name} */
-export async function getProjectDesigns(projectName: string): Promise<Design[]> {
+/** GET /api/designs/project_designs/{projectId} */
+export async function getProjectDesigns(projectId: string): Promise<Design[]> {
   const { data } = await http.get<Design[]>(
-    `/designs/project_designs/${encodeURIComponent(projectName)}`,
+    `/designs/project_designs/${projectId}`,
   );
   // Same guard as getAllProjects: a non-array body means the request didn't
   // reach the mock/backend, so fail loudly rather than crashing on `.map`.
@@ -30,16 +30,16 @@ export async function getDesignStatus(designId: string): Promise<ProcessingStatu
 }
 
 export interface UploadDesignArgs {
-  projectName: string;
+  projectId: string;
   /** User-supplied design name. */
   name: string;
   file: File;
   onProgress?: (percent: number) => void;
 }
 
-/** POST /api/designs/{project_name} — multipart { name, file } */
+/** POST /api/designs/{projectId} — multipart { name, file } */
 export async function uploadDesign({
-  projectName,
+  projectId,
   name,
   file,
   onProgress,
@@ -49,7 +49,7 @@ export async function uploadDesign({
   form.append('file', file);
 
   const { data } = await http.post<Design>(
-    `/designs/${encodeURIComponent(projectName)}`,
+    `/designs/${projectId}`,
     form,
     {
       onUploadProgress: (e: AxiosProgressEvent) => {
@@ -62,12 +62,21 @@ export async function uploadDesign({
   return data;
 }
 
-/** PATCH /api/designs/{designId} — rename and/or edit metadata */
+/** PATCH /api/designs/{designId} — rename a design. */
 export async function updateDesign(
   designId: string,
   patch: DesignPatch,
 ): Promise<Design> {
   const { data } = await http.patch<Design>(`/designs/${designId}`, patch);
+  return data;
+}
+
+/** PATCH /api/modules/{moduleId} — edit a module's extracted metadata. */
+export async function updateModule(
+  moduleId: string,
+  patch: ModulePatch,
+): Promise<Module> {
+  const { data } = await http.patch<Module>(`/modules/${moduleId}`, patch);
   return data;
 }
 

@@ -85,7 +85,7 @@ export function ProjectsDashboard() {
       {projects && projects.length > 0 && (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
           {projects.map((p) => (
-            <ProjectCard key={p.name} project={p} />
+            <ProjectCard key={p.projectId} project={p} />
           ))}
         </SimpleGrid>
       )}

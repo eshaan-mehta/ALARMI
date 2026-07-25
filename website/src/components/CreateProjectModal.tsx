@@ -15,9 +15,10 @@ export function CreateProjectModal({ opened, onClose }: Props) {
   const createProject = useCreateProject();
 
   const form = useForm({
-    initialValues: { name: '' },
+    initialValues: { name: '', location: '' },
     validate: {
       name: (v) => (v.trim().length === 0 ? 'Project name is required' : null),
+      location: (v) => (v.trim().length === 0 ? 'Project location is required' : null),
     },
   });
 
@@ -27,23 +28,26 @@ export function CreateProjectModal({ opened, onClose }: Props) {
   };
 
   const handleSubmit = form.onSubmit((values) => {
-    createProject.mutate(values.name.trim(), {
-      onSuccess: (project) => {
-        notifications.show({
-          color: 'teal',
-          title: 'Project created',
-          message: `“${project.name}” is ready for designs.`,
-        });
-        handleClose();
-        navigate(`/projects/${encodeURIComponent(project.name)}`);
+    createProject.mutate(
+      { name: values.name.trim(), location: values.location.trim() },
+      {
+        onSuccess: (project) => {
+          notifications.show({
+            color: 'teal',
+            title: 'Project created',
+            message: `“${project.name}” is ready for designs.`,
+          });
+          handleClose();
+          navigate(`/projects/${project.projectId}`);
+        },
+        onError: (err) => {
+          const message = isAxiosError(err)
+            ? (err.response?.data?.message ?? 'Could not create project.')
+            : 'Could not create project.';
+          form.setFieldError('name', message);
+        },
       },
-      onError: (err) => {
-        const message = isAxiosError(err)
-          ? (err.response?.data?.message ?? 'Could not create project.')
-          : 'Could not create project.';
-        form.setFieldError('name', message);
-      },
-    });
+    );
   });
 
   return (
@@ -55,6 +59,11 @@ export function CreateProjectModal({ opened, onClose }: Props) {
             placeholder="e.g. Riverside Modular Clinic"
             data-autofocus
             {...form.getInputProps('name')}
+          />
+          <TextInput
+            label="Location"
+            placeholder="e.g. Portland, OR"
+            {...form.getInputProps('location')}
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={handleClose}>

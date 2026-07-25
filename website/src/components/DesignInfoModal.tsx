@@ -1,4 +1,4 @@
-import { Divider, Group, Modal, Stack, Text } from '@mantine/core';
+import { Group, Modal, Stack, Text } from '@mantine/core';
 import { formatBytes, formatDate } from '../lib/format';
 import type { Design } from '../data/designs/types';
 import { StatusBadge } from './StatusBadge';
@@ -22,9 +22,11 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Design-level metadata only. The extracted modules are shown in the design
+ * row's expandable panel, so they're intentionally not duplicated here.
+ */
 export function DesignInfoModal({ design, opened, onClose }: Props) {
-  const isComplete = design.status === 'COMPLETE';
-
   return (
     <Modal opened={opened} onClose={onClose} title="Design info" centered>
       <Stack gap="sm">
@@ -38,25 +40,8 @@ export function DesignInfoModal({ design, opened, onClose }: Props) {
           <StatusBadge status={design.status} />
         </Group>
         <InfoRow label="Uploaded" value={formatDate(design.uploadTime)} />
+        <InfoRow label="Modules" value={String(design.modules.length)} />
         <InfoRow label="Design ID" value={design.designId} />
-
-        {isComplete && (
-          <>
-            <Divider label="Metadata" labelPosition="left" my={4} />
-            {design.moduleType && <InfoRow label="Type" value={design.moduleType} />}
-            {design.dimensions && (
-              <InfoRow
-                label="Dimensions"
-                value={`${design.dimensions.x} × ${design.dimensions.y} × ${design.dimensions.z} m`}
-              />
-            )}
-            {design.anchorCount != null && (
-              <InfoRow label="Anchor points" value={String(design.anchorCount)} />
-            )}
-            {design.roomId && <InfoRow label="Room" value={design.roomId} />}
-            {design.unitScale && <InfoRow label="Unit scale" value={design.unitScale} />}
-          </>
-        )}
       </Stack>
     </Modal>
   );
