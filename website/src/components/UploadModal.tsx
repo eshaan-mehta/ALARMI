@@ -22,17 +22,17 @@ import { formatBytes } from '../lib/format';
 import { useUploadDesign } from '../data/designs/hooks';
 
 interface Props {
-  projectName: string;
+  projectId: string;
   opened: boolean;
   onClose: () => void;
 }
 
 const MAX_BYTES = 1024 ** 3; // 1 GB
 
-export function UploadModal({ projectName, opened, onClose }: Props) {
+export function UploadModal({ projectId, opened, onClose }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
-  const upload = useUploadDesign(projectName);
+  const upload = useUploadDesign(projectId);
 
   const form = useForm({
     initialValues: { name: '' },
