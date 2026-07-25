@@ -2,15 +2,15 @@ import type { AxiosProgressEvent } from 'axios';
 import { http } from '../http';
 import type { Design, DesignPatch, Module, ModulePatch, ProcessingStatus } from './types';
 
-/** GET /api/designs/project_designs/{projectId} */
+/** GET /api/projects/{projectId}/designs */
 export async function getProjectDesigns(projectId: string): Promise<Design[]> {
   const { data } = await http.get<Design[]>(
-    `/designs/project_designs/${projectId}`,
+    `/projects/${projectId}/designs`,
   );
   // Same guard as getAllProjects: a non-array body means the request didn't
   // reach the mock/backend, so fail loudly rather than crashing on `.map`.
   if (!Array.isArray(data)) {
-    throw new Error('Expected an array of designs from /designs/project_designs');
+    throw new Error('Expected an array of designs from /projects/{projectId}/designs');
   }
   return data;
 }
@@ -37,7 +37,7 @@ export interface UploadDesignArgs {
   onProgress?: (percent: number) => void;
 }
 
-/** POST /api/designs/{projectId} — multipart { name, file } */
+/** POST /api/projects/{projectId}/designs — multipart { name, file } */
 export async function uploadDesign({
   projectId,
   name,
@@ -49,7 +49,7 @@ export async function uploadDesign({
   form.append('file', file);
 
   const { data } = await http.post<Design>(
-    `/designs/${projectId}`,
+    `/projects/${projectId}/designs`,
     form,
     {
       onUploadProgress: (e: AxiosProgressEvent) => {

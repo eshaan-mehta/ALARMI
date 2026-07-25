@@ -44,12 +44,12 @@ export const handlers = [
   }),
 
   // ---- Designs ----
-  http.get(`${BASE}/designs/project_designs/:projectId`, async ({ params }) => {
+  http.get(`${BASE}/projects/:projectId/designs`, async ({ params }) => {
     await delay(LATENCY);
     return HttpResponse.json(db.listDesigns(String(params.projectId)));
   }),
 
-  http.post(`${BASE}/designs/:projectId`, async ({ request, params }) => {
+  http.post(`${BASE}/projects/:projectId/designs`, async ({ request, params }) => {
     await delay(LATENCY);
     const form = await request.formData();
     const file = form.get('file');
