@@ -27,6 +27,7 @@ import {
 } from '@tabler/icons-react';
 import { useDeleteDesign, useDesignModules } from '../data/designs/hooks';
 import type { Design, Module } from '../data/designs/types';
+import { unitAbbr } from '../lib/units';
 import { StatusBadge } from './StatusBadge';
 import { DesignInfoModal } from './DesignInfoModal';
 import { EditModuleModal } from './EditModuleModal';
@@ -41,7 +42,8 @@ interface Props {
 function dims(m: Module): string | null {
   if (!m.dimensions) return null;
   const { x, y, z } = m.dimensions;
-  return `${x} × ${y} × ${z} m`;
+  const unit = unitAbbr(m.unitScale);
+  return `${x} × ${y} × ${z}${unit ? ` ${unit}` : ''}`;
 }
 
 /** One labelled metadata line inside a module tile. */
@@ -95,7 +97,6 @@ function ModuleTile({ module, onEdit }: { module: Module; onEdit: () => void }) 
       <Divider mb={6} />
       {d && <MetaLine label="Dimensions" value={d} />}
       {module.roomId && <MetaLine label="Room" value={module.roomId} />}
-      {module.unitScale && <MetaLine label="Unit scale" value={module.unitScale} />}
       <MetaLine label="Module ID" value={module.moduleId} />
     </Paper>
   );
