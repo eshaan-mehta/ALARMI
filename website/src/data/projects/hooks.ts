@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
-import { createProject, getAllProjects, renameProject } from './api';
+import { createProject, getAllProjects, renameProject, type CreateProjectArgs } from './api';
 
 export function useProjects() {
   return useQuery({
@@ -9,10 +9,23 @@ export function useProjects() {
   });
 }
 
+/**
+ * A single project looked up by id from the projects list (the mock has no
+ * get-one endpoint; the list is cached, so this avoids an extra request).
+ * `project` is undefined while loading or if the id doesn't exist.
+ */
+export function useProject(projectId: string) {
+  const query = useProjects();
+  return {
+    ...query,
+    project: query.data?.find((p) => p.projectId === projectId),
+  };
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => createProject(name),
+    mutationFn: (args: CreateProjectArgs) => createProject(args),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
   });
 }
@@ -20,8 +33,8 @@ export function useCreateProject() {
 export function useRenameProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, newName }: { name: string; newName: string }) =>
-      renameProject(name, newName),
+    mutationFn: ({ projectId, newName }: { projectId: string; newName: string }) =>
+      renameProject(projectId, newName),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
   });
 }

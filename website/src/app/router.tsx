@@ -16,7 +16,7 @@ export const router = createBrowserRouter([
         path: 'projects',
         children: [
           { index: true, element: <ProjectsDashboard /> },
-          { path: ':projectName', element: <ProjectDetail /> },
+          { path: ':projectId', element: <ProjectDetail /> },
         ],
       },
       { path: '*', element: <NotFound /> },
