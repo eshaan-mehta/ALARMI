@@ -13,6 +13,7 @@ from .db import init_db
 from .designs.router import router as designs_router
 from .errors import ApiError
 from .modules.router import router as modules_router
+from .objects.router import router as objects_router
 from .projects.router import router as projects_router
 
 logger = logging.getLogger("alarmi")
@@ -90,3 +91,4 @@ def health():
 app.include_router(projects_router, prefix="/api")
 app.include_router(designs_router, prefix="/api")
 app.include_router(modules_router, prefix="/api")
+app.include_router(objects_router, prefix="/api")

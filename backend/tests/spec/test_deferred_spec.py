@@ -68,15 +68,8 @@ class TestMobileEndpoints:
         remaining = client.get(f"/api/designs/{design['designId']}/modules").json()
         assert len(remaining) == len(modules) - 1
 
-    @pytest.mark.xfail(reason="Blob storage + GLB conversion deferred (FS4)", strict=False)
-    def test_presigned_glb_url(self, client):
-        """Table 4 + §3.2.4: the GLB is stored in blob storage under the
-        ModuleID, and the API hands back a presigned URL for it."""
-        _, design = _project_with_design(client)
-        module_id = client.get(f"/api/designs/{design['designId']}/modules").json()[0]["moduleId"]
-        res = client.get(f"/api/objects/get_url/{module_id}")
-        assert res.status_code == 200
-        assert res.json()["url"].startswith("http")
+    # test_presigned_glb_url graduated → tests/api/test_objects_api.py
+    #   (GET /api/objects/get_url/{moduleId} now returns a presigned GLB URL).
 
 
 class TestRealProcessing:
@@ -123,18 +116,8 @@ class TestRealProcessing:
         module = client.get(f"/api/designs/{design['designId']}/modules").json()[0]
         assert {"pose", "marks", "boundaryPolygon", "roomOrigin"} <= set(module)
 
-    @pytest.mark.xfail(reason="Processing is synchronous, so a design is never observably PROCESSING", strict=False)
-    def test_processing_is_asynchronous(self, client):
-        """FS2 only means something if the user can see the in-progress state;
-        NFS8 allows up to 2 minutes for a 50 MB file, which cannot block the
-        upload response."""
-        project = client.post("/api/projects", json={"name": "Async", "location": "X"}).json()
-        res = client.post(
-            f"/api/projects/{project['projectId']}/designs",
-            data={"name": "Async design"},
-            files={"file": ("async.ifc", ifc_bytes(4096), "application/octet-stream")},
-        )
-        assert res.json()["status"] == "PROCESSING"
+    # test_processing_is_asynchronous graduated → tests/api/test_upload_api.py
+    #   (upload returns PROCESSING immediately; a background worker settles it).
 
     @pytest.mark.xfail(reason="No failure path — the stub always succeeds", strict=False)
     def test_an_unparseable_file_ends_in_error(self, client):

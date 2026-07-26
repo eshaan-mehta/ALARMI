@@ -22,6 +22,10 @@ class Design(Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)  # PROCESSING|COMPLETE|ERROR
     upload_time: Mapped[str] = mapped_column(String, nullable=False)
+    # Set by the processing worker when it reaches a terminal status. Server-side
+    # diagnostics — not part of the DesignOut the client reads.
+    processed_time: Mapped[str | None] = mapped_column(String, nullable=True)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     project: Mapped["Project"] = relationship("Project", back_populates="designs")
     modules: Mapped[list["Module"]] = relationship(

@@ -18,6 +18,11 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="alarmi-tests-"))
 _DB_PATH = _TMP_DIR / "test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB_PATH}"
 os.environ["APP_ENV"] = "test"
+# The stub extractor sleeps this long before a design flips to COMPLETE. Zero in
+# tests so the enqueued job finishes instantly (the in-process TestClient runs it
+# before the upload call even returns). This env also reaches the live-server
+# subprocess via os.environ.
+os.environ["PROCESSING_DELAY_SECONDS"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
@@ -139,10 +144,13 @@ def make_project(client):
 
 @pytest.fixture
 def upload_design(client):
-    """Upload a design through the API and return its JSON body.
+    """Upload a design through the API and return the *settled* design.
 
-    ``size`` controls the payload length exactly, which matters because the stub
-    processor derives its fabricated module count from the file size.
+    Upload now returns immediately with status PROCESSING; the extraction runs as
+    a background job. Under the in-process TestClient that job finishes before the
+    upload call returns, so a re-read reflects the COMPLETE design (with its
+    modules) that the rest of the suite asserts against. ``size`` controls the
+    payload length exactly, which drives the stub's fabricated module count.
     """
 
     def _upload(
@@ -160,7 +168,9 @@ def upload_design(client):
             files={"file": (filename, payload, "application/octet-stream")},
         )
         assert res.status_code == expect, res.text
-        return res.json()
+        if expect != 201:
+            return res.json()
+        return client.get(f"/api/designs/{res.json()['designId']}").json()
 
     return _upload
 

@@ -39,7 +39,12 @@ def live_url(tmp_path_factory):
     """
     port = _free_port()
     db_path = tmp_path_factory.mktemp("live") / "live.db"
-    env = {**os.environ, "DATABASE_URL": f"sqlite:///{db_path}", "APP_ENV": "test"}
+    env = {
+        **os.environ,
+        "DATABASE_URL": f"sqlite:///{db_path}",
+        "APP_ENV": "test",
+        "PROCESSING_DELAY_SECONDS": "0",  # don't make the poll wait the real 5s
+    }
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(port), "--log-level", "warning"],
         cwd=BACKEND_DIR,
@@ -112,13 +117,25 @@ class TestOverRealHttp:
         assert uploaded.status_code == 201
         design = uploaded.json()
         assert design["fileSize"] == 4096
+        assert design["status"] == "PROCESSING"  # extraction runs in the background
 
-        status = httpx.get(f"{live_url}/api/designs/{design['designId']}/status", timeout=5)
-        assert status.status_code == 200
+        # Poll status until the out-of-process worker settles the design. (Unlike
+        # the in-process TestClient, a real server runs the job truly async.)
+        deadline = time.monotonic() + 10
+        status = "PROCESSING"
+        while time.monotonic() < deadline:
+            status = httpx.get(
+                f"{live_url}/api/designs/{design['designId']}/status", timeout=5
+            ).json()["status"]
+            if status != "PROCESSING":
+                break
+            time.sleep(0.05)
+        assert status == "COMPLETE"
 
+        settled = httpx.get(f"{live_url}/api/designs/{design['designId']}", timeout=5).json()
         modules = httpx.get(f"{live_url}/api/designs/{design['designId']}/modules", timeout=5)
         assert modules.status_code == 200
-        assert len(modules.json()) == design["moduleCount"]
+        assert len(modules.json()) == settled["moduleCount"]
 
         deleted = httpx.delete(f"{live_url}/api/designs/{design['designId']}", timeout=5)
         assert deleted.status_code == 204

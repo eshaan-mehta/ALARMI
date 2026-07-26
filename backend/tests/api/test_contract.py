@@ -143,6 +143,7 @@ class TestRouting:
             "/api/designs/{design_id}/status",
             "/api/designs/{design_id}/modules",
             "/api/modules/{module_id}",
+            "/api/objects/get_url/{module_id}",
         } <= paths
 
     def test_interactive_docs_are_served(self, client):

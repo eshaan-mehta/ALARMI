@@ -1,7 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..ifc.processor import process_design
 from ..modules import repository as modules_repo
 from ..modules.models import Module
 from ..modules.schemas import ModuleOut
@@ -69,8 +68,9 @@ def list_modules(db: Session, design_id: str) -> list[ModuleOut] | None:
 def create_design(
     db: Session, project_id: str, name: str, file_name: str, file_size: int
 ) -> DesignOut | None:
-    """Creates a design and runs the stub processor. Returns ``None`` if the
-    parent project doesn't exist."""
+    """Records an uploaded design in PROCESSING. Extraction runs afterwards, off
+    the request (see ``app/processing/worker.py``), so no modules exist yet.
+    Returns ``None`` if the parent project doesn't exist."""
     if db.get(Project, project_id) is None:
         return None
     d = Design(
@@ -83,7 +83,6 @@ def create_design(
         upload_time=now_iso(),
     )
     db.add(d)
-    process_design(db, d, file_size)  # stub: fabricates modules, marks COMPLETE
     db.commit()
     db.refresh(d)
     return to_design_out(db, d)

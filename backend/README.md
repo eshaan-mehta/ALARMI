@@ -16,7 +16,23 @@ frontend's `api`/`hooks`/`types`):
 
 **Data model:** a **Project** holds many **Designs** (one uploaded IFC each); a
 completed Design holds many **Modules** (the extracted components + their
-metadata). 
+metadata).
+
+## Processing pipeline
+
+Upload does **not** block on IFC processing. `POST …/designs` stashes the file in
+blob storage, returns immediately with `status=PROCESSING`, and enqueues a job;
+a background worker extracts the modules and settles the design to `COMPLETE`
+(or `ERROR`). The web client polls `GET …/status`; mobile follows
+`GET /api/objects/get_url/{moduleId}` to a presigned GLB URL for AR.
+
+Three seams keep this swappable:
+
+| Module | Today (scaffolding) | Later |
+|--------|--------------------|-------|
+| `ifc/processor.py::extract` | sleeps, fabricates placeholder modules | **IFC team**: real IfcOpenShell extraction |
+| `blob.py` | `FakeBlobStore` — accepts writes, drops bytes, returns a SAS-shaped URL | Azure Blob client |
+| `processing/queue.py::enqueue` | in-process FastAPI background task | Azure Storage Queue + separate worker |
 
 ## Running
 
@@ -38,6 +54,7 @@ uv run dev --reset --seed   # wipe the DB, re-seed, then run (clean slate)
 |-----|---------|---------|
 | `DATABASE_URL` | `sqlite:///./alarmi.db` | Metadata store. Set to the Azure SQL connection string when deployed |
 | `APP_ENV` | `local` | `local` \| `azure` (informational) |
+| `PROCESSING_DELAY_SECONDS` | `5` | How long the stub extractor pretends to work before a design flips to `COMPLETE`. Tests set it to `0` |
 
 No `.env` needed for local dev — copy `.env.example` only to override.
 

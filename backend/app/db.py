@@ -14,7 +14,14 @@ _is_sqlite = settings.database_url.startswith("sqlite")
 # a threadpool. The arg is harmless to omit for other backends (e.g. Azure SQL).
 _connect_args = {"check_same_thread": False} if _is_sqlite else {}
 
-engine = create_engine(settings.database_url, connect_args=_connect_args)
+# pool_pre_ping matters for Azure SQL serverless: the DB auto-pauses when idle,
+# so a pooled connection can be dead by the next request. Pre-ping discards it
+# and reconnects (the paused DB resumes) instead of erroring. No-op for SQLite.
+engine = create_engine(
+    settings.database_url,
+    connect_args=_connect_args,
+    pool_pre_ping=not _is_sqlite,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

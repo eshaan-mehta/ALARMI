@@ -15,6 +15,10 @@ def to_module_out(m: Module) -> ModuleOut:
     )
 
 
+def module_exists(db: Session, module_id: str) -> bool:
+    return db.get(Module, module_id) is not None
+
+
 def list_for_design(db: Session, design_id: str) -> list[ModuleOut]:
     rows = db.scalars(select(Module).where(Module.design_id == design_id)).all()
     return [to_module_out(m) for m in rows]

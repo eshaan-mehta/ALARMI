@@ -12,6 +12,15 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+# Deploy-only deps. Kept out of the default install so local dev + tests need no
+# ODBC system driver or Azure SDK: `uv sync` stays SQLite + FakeBlobStore. The
+# Docker image installs these with `uv sync --extra azure`.
+[project.optional-dependencies]
+azure = [
+    "pyodbc>=5.1",                # Azure SQL driver (needs ODBC Driver 18, apt in Docker)
+    "azure-storage-blob>=12.19",  # AzureBlobStore uploads + SAS URLs
+]
+
 # Dev CLI entry points — run with `uv run dev` / `uv run seed` (see cli.py).
 [project.scripts]
 dev = "cli:dev"

@@ -1,20 +1,16 @@
-"""IFC processor — STUB.
+"""IFC processor — the extraction SEAM.
 
-Phase 1 does no real IFC work. On upload this fabricates a few placeholder
-modules and marks the design COMPLETE synchronously, so the frontend has data
-to render. In a later slice this is replaced by IfcOpenShell extraction running
-asynchronously off a queue, and status becomes genuinely time-dependent.
+This is the plug the IFC-processing team fills. Given a reference to an uploaded
+IFC file in blob storage, ``extract`` returns one dict of Table 5 metadata per
+extracted module. It does no real IFC work today: it sleeps to mimic a
+long-running parse, then fabricates deterministic placeholder modules so the
+rest of the pipeline (status lifecycle, module list, GLB URL) is demonstrable
+end to end. The worker (``app/processing/worker.py``) calls this off the request.
 """
 
-from typing import TYPE_CHECKING
+import time
 
-from sqlalchemy.orm import Session
-
-from ..modules.models import Module
-from ..util import new_id
-
-if TYPE_CHECKING:
-    from ..designs.models import Design
+from ..config import settings
 
 _MODULE_TYPES = [
     "Wall Panel",
@@ -42,9 +38,14 @@ def _generate_modules(seed: int) -> list[dict]:
     return out
 
 
-def process_design(db: Session, design: "Design", file_size: int) -> None:
-    """STUB: attach fabricated modules to the design and mark it COMPLETE.
-    Does not commit — the caller owns the transaction."""
-    for data in _generate_modules(file_size):
-        db.add(Module(module_id=new_id("mod"), design_id=design.design_id, **data))
-    design.status = "COMPLETE"
+def extract(source_ref: str, file_size: int) -> list[dict]:
+    """Return the modules extracted from the IFC at ``source_ref`` (a blob key).
+
+    # TODO(processing-team): replace the body below with real IfcOpenShell
+    # extraction — open ``source_ref`` from blob storage, walk the elements
+    # flagged ``FloorMark.IsMarkingModule``, and emit each one's Table 5
+    # metadata (Type, Dimensions, RoomID, Unit Scale, ...) plus its GLB. Until
+    # then this sleeps to mimic the parse and fabricates placeholders.
+    """
+    time.sleep(settings.processing_delay_seconds)
+    return _generate_modules(file_size)

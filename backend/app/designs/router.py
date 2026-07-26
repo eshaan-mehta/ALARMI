@@ -1,9 +1,19 @@
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Response,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
+from .. import blob
 from ..db import get_db
 from ..errors import ApiError
 from ..modules.schemas import ModuleOut
+from ..processing import queue
 from . import repository as repo
 from .schemas import DesignOut, DesignRename, StatusOut
 
@@ -27,6 +37,7 @@ def list_designs(project_id: str, db: Session = Depends(get_db)):
 )
 def upload_design(
     project_id: str,
+    background_tasks: BackgroundTasks,
     name: str = Form(""),
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
@@ -46,6 +57,13 @@ def upload_design(
     created = repo.create_design(db, project_id, design_name, filename, size)
     if created is None:
         raise ApiError(404, "Project not found.")
+
+    # Stash the source in blob storage (fake: bytes dropped), then hand
+    # extraction to the background so the upload returns immediately with status
+    # PROCESSING. The client polls /status until the worker settles it.
+    # NOTE: these actions must always remain sequential to avoid a race condition where the worker tries to read the blob before it is written.
+    blob.get_blob_store().put(blob.source_key(created.designId), file.file.read())
+    queue.enqueue(background_tasks, created.designId)
     return created
 
 

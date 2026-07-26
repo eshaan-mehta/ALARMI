@@ -77,11 +77,38 @@ class TestSuccessfulUpload:
 
     def test_extracts_metadata_for_the_upload(self, client, project):
         """FS5: processing must store the module metadata, and it must be
-        reachable through the modules endpoint."""
+        reachable through the modules endpoint once the design settles."""
         created = _post(client, project["projectId"]).json()
+        settled = client.get(f"/api/designs/{created['designId']}").json()
         modules = client.get(f"/api/designs/{created['designId']}/modules").json()
-        if created["status"] == "COMPLETE":
-            assert len(modules) == created["moduleCount"] >= 1
+        assert len(modules) == settled["moduleCount"] >= 1
+
+
+class TestAsyncProcessing:
+    """FS2/NFS8: extraction can take up to two minutes, so the upload can't block
+    on it. It returns immediately in PROCESSING and a background worker settles
+    the design to COMPLETE."""
+
+    def test_upload_returns_processing_immediately(self, client, project):
+        res = _post(client, project["projectId"])
+        assert res.status_code == 201
+        assert res.json()["status"] == "PROCESSING"
+        assert res.json()["moduleCount"] == 0
+
+    def test_processing_settles_to_complete(self, client, project):
+        created = _post(client, project["projectId"]).json()
+        status = client.get(f"/api/designs/{created['designId']}/status").json()["status"]
+        assert status == "COMPLETE"
+
+    def test_the_source_is_handed_to_blob_storage(self, client, project, monkeypatch):
+        """The uploaded bytes are written to object storage under the design's
+        source key (the fake store drops them; a real one keeps them)."""
+        from app import blob
+
+        put_keys: list[str] = []
+        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
+        created = _post(client, project["projectId"]).json()
+        assert blob.source_key(created["designId"]) in put_keys
 
 
 class TestUploadValidation:

@@ -7,12 +7,22 @@ from sqlalchemy import select
 from app.designs import repository as repo
 from app.designs.models import Design
 from app.modules.models import Module
+from app.processing.worker import run_job
 from app.projects import repository as projects_repo
 from conftest import DESIGN_FIELDS, STATUSES
 
 
 def _project(db, name="P", location="Waterloo, ON") -> str:
     return projects_repo.create_project(db, name, location).projectId
+
+
+def _processed(db, project_id, name="A", file_name="a.ifc", size=1024):
+    """Create a design and run its (async) processing to completion, the way an
+    upload does. Returns the settled DesignOut, with its modules attached."""
+    created = repo.create_design(db, project_id, name, file_name, size)
+    run_job(created.designId)
+    db.expire_all()
+    return repo.get_design(db, created.designId)
 
 
 class TestCreateDesign:
@@ -41,19 +51,20 @@ class TestCreateDesign:
         repo.create_design(db, "prj_missing", "A", "a.ifc", 10)
         assert db.scalar(select(Design)) is None
 
-    def test_runs_the_processor_so_modules_exist(self, db):
-        """FS5: the metadata has to be extracted and stored, not just the file
-        recorded."""
+    def test_starts_in_processing_with_no_modules_yet(self, db):
+        """Extraction is async now: create only records the upload — the design
+        sits in PROCESSING with nothing extracted until the worker runs."""
         out = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
-        modules = db.scalars(
-            select(Module).where(Module.design_id == out.designId)
-        ).all()
-        assert len(modules) >= 1
+        assert out.status == "PROCESSING"
+        assert out.moduleCount == 0
+        assert db.scalars(select(Module).where(Module.design_id == out.designId)).all() == []
 
-    def test_module_count_matches_the_stored_modules(self, db):
-        out = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
+    def test_processing_produces_the_counted_modules(self, db):
+        """FS5: once the worker runs, the metadata is extracted and the count
+        matches the stored modules."""
+        out = _processed(db, _project(db))
         stored = db.scalars(select(Module).where(Module.design_id == out.designId)).all()
-        assert out.moduleCount == len(stored)
+        assert out.moduleCount == len(stored) >= 1
 
 
 class TestListDesigns:
@@ -106,29 +117,31 @@ class TestListModules:
         assert repo.list_modules(db, "dsn_missing") is None
 
     def test_returns_the_designs_modules(self, db):
-        created = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
-        assert len(repo.list_modules(db, created.designId)) == created.moduleCount
+        out = _processed(db, _project(db))
+        assert len(repo.list_modules(db, out.designId)) == out.moduleCount >= 1
 
     def test_empty_while_still_processing(self, db):
-        """Metadata is only meaningful once extraction finishes."""
-        created = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
-        design = db.get(Design, created.designId)
+        """Metadata stays hidden until the design is COMPLETE, even once rows
+        exist — the count on the list is only meaningful when processing is done."""
+        out = _processed(db, _project(db))
+        assert len(repo.list_modules(db, out.designId)) >= 1
+        design = db.get(Design, out.designId)
         design.status = "PROCESSING"
         db.commit()
-        assert repo.list_modules(db, created.designId) == []
+        assert repo.list_modules(db, out.designId) == []
 
     def test_scoped_to_one_design(self, db):
         project_id = _project(db)
-        one = repo.create_design(db, project_id, "One", "1.ifc", 1024)
-        two = repo.create_design(db, project_id, "Two", "2.ifc", 2048)
+        one = _processed(db, project_id, "One", "1.ifc", 1024)
+        two = _processed(db, project_id, "Two", "2.ifc", 2048)
         ids_one = {m.moduleId for m in repo.list_modules(db, one.designId)}
         ids_two = {m.moduleId for m in repo.list_modules(db, two.designId)}
         assert ids_one.isdisjoint(ids_two)
 
     def test_order_is_stable_across_calls(self, db):
-        created = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
-        first = [m.moduleId for m in repo.list_modules(db, created.designId)]
-        second = [m.moduleId for m in repo.list_modules(db, created.designId)]
+        out = _processed(db, _project(db))
+        first = [m.moduleId for m in repo.list_modules(db, out.designId)]
+        second = [m.moduleId for m in repo.list_modules(db, out.designId)]
         assert first == second
 
 
@@ -169,19 +182,18 @@ class TestDeleteDesign:
 
     def test_cascades_to_the_designs_modules(self, db):
         """No orphaned metadata — the modules only exist because of this file."""
-        created = repo.create_design(db, _project(db), "A", "a.ifc", 1024)
-        repo.delete_design(db, created.designId)
-        assert (
-            db.scalar(select(Module).where(Module.design_id == created.designId)) is None
-        )
+        out = _processed(db, _project(db))
+        assert db.scalar(select(Module).where(Module.design_id == out.designId)) is not None
+        repo.delete_design(db, out.designId)
+        assert db.scalar(select(Module).where(Module.design_id == out.designId)) is None
 
     def test_leaves_other_designs_alone(self, db):
         project_id = _project(db)
-        keep = repo.create_design(db, project_id, "Keep", "k.ifc", 1024)
-        drop = repo.create_design(db, project_id, "Drop", "d.ifc", 2048)
+        keep = _processed(db, project_id, "Keep", "k.ifc", 1024)
+        drop = _processed(db, project_id, "Drop", "d.ifc", 2048)
         repo.delete_design(db, drop.designId)
         assert repo.get_design(db, keep.designId) is not None
-        assert len(repo.list_modules(db, keep.designId)) == keep.moduleCount
+        assert len(repo.list_modules(db, keep.designId)) == keep.moduleCount >= 1
 
     def test_drops_the_projects_design_count(self, db):
         project_id = _project(db)

@@ -172,6 +172,9 @@ class TestPersistence:
             "/api/projects", json={"name": "Persisted", "location": "Waterloo, ON"}
         ).json()
         design = _upload(client, project["projectId"], "Persisted design", "p.ifc").json()
+        # Upload returns PROCESSING; re-read the settled design so the post-restart
+        # comparison is against its final (COMPLETE) shape.
+        design = client.get(f"/api/designs/{design['designId']}").json()
         modules = client.get(f"/api/designs/{design['designId']}/modules").json()
         client.patch(f"/api/modules/{modules[0]['moduleId']}", json={"type": "Wall Panel"})
 
