@@ -1,0 +1,18 @@
+# Keep the build context small + never ship local state into the image.
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+alarmi.db
+*.db
+.env
+.env.local
+.git/
+.gitignore
+infra/
+azure.yaml
+Dockerfile
+.dockerignore
+README.md

@@ -2,7 +2,7 @@
 
 Frontend for ALARMI. React + TypeScript SPA that lets users manage **projects** and their **designs** (upload, view, edit).
 
-Talks to the ALARMI backend REST API. In dev it defaults to an in-browser mock (MSW), so you can run it with no backend.
+Talks to the ALARMI backend REST API (see `../backend`).
 
 ## Stack
 
@@ -11,26 +11,20 @@ Talks to the ALARMI backend REST API. In dev it defaults to an in-browser mock (
 - **TanStack Query** — server state / data fetching
 - **React Router** — routing
 - **Axios** — HTTP client
-- **MSW** — mock backend for local dev
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173, uses MSW mock backend
+npm run dev          # http://localhost:5173
 ```
 
-No `.env` needed for the mock. To point at a real backend:
-
-```bash
-cp .env.example .env
-# set VITE_API_BASE_URL and VITE_USE_MOCKS=false
-```
+Start the backend first (`cd ../backend && uv run dev`). The dev server reads
+`VITE_API_BASE_URL` from `.env.local` (already set to `http://localhost:8000/api`).
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `VITE_API_BASE_URL` | `/api` | Backend REST base URL |
-| `VITE_USE_MOCKS` | `true` (dev only) | Start MSW mock backend; set `false` to hit a real API |
+| `VITE_API_BASE_URL` | `/api` | Backend REST base URL (set to `http://localhost:8000/api` for local dev) |
 
 ## Scripts
 
@@ -54,7 +48,6 @@ src/
     queryKeys.ts    #   TanStack Query keys
     projects/       #   api + hooks + types
     designs/        #   api + hooks + types
-    mocks/          #   MSW handlers + in-memory db (dev backend)
   lib/              # env + formatting helpers
   index.css
 public/             # static assets + MSW worker
@@ -71,4 +64,4 @@ public/             # static assets + MSW worker
 
 ## Data layer
 
-Each domain (`projects`, `designs`) has the same shape: `api.ts` (raw calls), `hooks.ts` (TanStack Query wrappers), `types.ts`. Components use hooks only. In dev, requests are intercepted by MSW handlers in `data/mocks/` backed by an in-memory db — swap the mock for the real API via env vars.
+Each domain (`projects`, `designs`) has the same shape: `api.ts` (raw calls), `hooks.ts` (TanStack Query wrappers), `types.ts`. Components use hooks only. Requests go to the backend REST API at `VITE_API_BASE_URL`.

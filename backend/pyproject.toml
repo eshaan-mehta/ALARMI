@@ -1,0 +1,52 @@
+[project]
+name = "alarmi-backend"
+version = "0.1.0"
+description = "ALARMI backend service — Phase 1: REST API over SQLite"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-multipart>=0.0.9",
+]
+
+# Deploy-only deps. Kept out of the default install so local dev + tests need no
+# ODBC system driver or Azure SDK: `uv sync` stays SQLite + FakeBlobStore. The
+# Docker image installs these with `uv sync --extra azure`.
+[project.optional-dependencies]
+azure = [
+    "pyodbc>=5.1",                # Azure SQL driver (needs ODBC Driver 18, apt in Docker)
+    "azure-storage-blob>=12.19",  # AzureBlobStore uploads + SAS URLs
+]
+
+# Dev CLI entry points — run with `uv run dev` / `uv run seed` (see cli.py).
+[project.scripts]
+dev = "cli:dev"
+seed = "cli:seed"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",  # required by fastapi.testclient
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]  # so `import app` / `import cli` resolve from backend/
+addopts = "-ra --strict-markers"
+markers = [
+    "policy: asserts a product decision that the design doc leaves open (see tests/README.md)",
+    "deferred: asserts spec behaviour scheduled for a later slice — expected to fail today",
+    "live: runs against a real uvicorn process over HTTP (slower than the in-process client)",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Only cli.py needs to ship for the entry points to resolve; the `app` package
+# is imported at runtime from the working directory (backend/).
+[tool.hatch.build.targets.wheel]
+packages = ["cli.py"]
