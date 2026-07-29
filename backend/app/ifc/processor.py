@@ -21,9 +21,9 @@ _MODULE_TYPES = [
 
 
 def _generate_modules(seed: int) -> list[dict]:
-    """Deterministic placeholder modules (1..3), derived from the file size so a
+    """A single deterministic placeholder module, derived from the file size so a
     given upload is stable. Mirrors the old MSW mock's fabrication."""
-    count = 1 + (seed % 3)
+    count = 1
     out: list[dict] = []
     for i in range(count):
         s = seed + i * 7

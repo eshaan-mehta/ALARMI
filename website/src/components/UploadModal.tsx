@@ -56,14 +56,6 @@ export function UploadModal({ projectId, opened, onClose }: Props) {
   const handleDrop = (files: File[]) => {
     const dropped = files[0];
     if (!dropped) return;
-    if (!dropped.name.toLowerCase().endsWith('.ifc')) {
-      notifications.show({
-        color: 'red',
-        title: 'Invalid file',
-        message: 'Only .ifc design files are accepted.',
-      });
-      return;
-    }
     if (dropped.size > MAX_BYTES) {
       notifications.show({
         color: 'red',
@@ -75,7 +67,7 @@ export function UploadModal({ projectId, opened, onClose }: Props) {
     setFile(dropped);
     // Prefill the name from the file if the user hasn't typed one.
     if (!form.values.name.trim()) {
-      form.setFieldValue('name', dropped.name.replace(/\.ifc$/i, ''));
+      form.setFieldValue('name', dropped.name.replace(/\.[^.]+$/, ''));
     }
   };
 
@@ -84,7 +76,7 @@ export function UploadModal({ projectId, opened, onClose }: Props) {
       notifications.show({
         color: 'red',
         title: 'No file selected',
-        message: 'Add an .ifc file before uploading.',
+        message: 'Add a file before uploading.',
       });
       return;
     }
@@ -179,7 +171,7 @@ export function UploadModal({ projectId, opened, onClose }: Props) {
                   <IconFile3d size={40} color="var(--mantine-color-dimmed)" />
                 </Dropzone.Idle>
                 <Text size="sm" fw={500}>
-                  Drag an .ifc file here or click to browse
+                  Drag a file here or click to browse
                 </Text>
                 <Text size="xs" c="dimmed">
                   Up to 1 GB

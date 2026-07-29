@@ -13,12 +13,12 @@ dependencies = [
 ]
 
 # Deploy-only deps. Kept out of the default install so local dev + tests need no
-# ODBC system driver or Azure SDK: `uv sync` stays SQLite + FakeBlobStore. The
-# Docker image installs these with `uv sync --extra azure`.
+# GCP SDK: `uv sync` stays SQLite + FakeBlobStore. The Docker image installs
+# these with `uv sync --extra gcp`.
 [project.optional-dependencies]
-azure = [
-    "pyodbc>=5.1",                # Azure SQL driver (needs ODBC Driver 18, apt in Docker)
-    "azure-storage-blob>=12.19",  # AzureBlobStore uploads + SAS URLs
+gcp = [
+    "google-cloud-storage>=2.18",  # GcsBlobStore uploads + V4 signed URLs
+    "pg8000>=1.31",                # Cloud SQL (Postgres) driver, pure-Python (no system libs)
 ]
 
 # Dev CLI entry points — run with `uv run dev` / `uv run seed` (see cli.py).

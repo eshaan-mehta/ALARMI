@@ -125,10 +125,10 @@ class TestUploadValidation:
         assert res.json()["message"]
 
     @pytest.mark.parametrize("filename", ["model.step", "model.pdf", "model", "model.ifc.txt", "ifc"])
-    def test_a_non_ifc_file_is_400(self, client, project, filename):
+    def test_any_file_type_is_accepted(self, client, project, filename):
+        """Uploads are no longer gated by extension — any document is accepted."""
         res = _post(client, project["projectId"], filename=filename)
-        assert res.status_code == 400
-        assert res.json()["message"]
+        assert res.status_code == 201
 
     @pytest.mark.policy
     def test_an_empty_file_is_400(self, client, project):
@@ -154,13 +154,13 @@ class TestUploadValidation:
         assert res.status_code == 201
 
     def test_a_rejected_upload_creates_nothing(self, client, project):
-        _post(client, project["projectId"], filename="model.step")
+        _post(client, project["projectId"], content=b"")  # empty file → 400
         assert client.get(f"/api/projects/{project['projectId']}/designs").json() == []
         assert client.get("/api/projects/all_projects").json()[0]["designCount"] == 0
 
     def test_rejected_uploads_do_not_leak_modules(self, client, project):
         """A failed upload must not leave fabricated metadata behind."""
-        _post(client, project["projectId"], filename="model.step")
+        _post(client, project["projectId"], content=b"")  # empty file → 400
         _post(client, "prj_missing")
         designs = client.get(f"/api/projects/{project['projectId']}/designs").json()
         assert designs == []

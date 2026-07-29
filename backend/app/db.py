@@ -11,12 +11,13 @@ class Base(DeclarativeBase):
 _is_sqlite = settings.database_url.startswith("sqlite")
 
 # SQLite needs check_same_thread disabled because FastAPI runs sync handlers in
-# a threadpool. The arg is harmless to omit for other backends (e.g. Azure SQL).
+# a threadpool. The arg is harmless to omit for other backends (e.g. Postgres).
 _connect_args = {"check_same_thread": False} if _is_sqlite else {}
 
-# pool_pre_ping matters for Azure SQL serverless: the DB auto-pauses when idle,
-# so a pooled connection can be dead by the next request. Pre-ping discards it
-# and reconnects (the paused DB resumes) instead of erroring. No-op for SQLite.
+# pool_pre_ping matters on Cloud Run + Cloud SQL: idle connections get cut (the
+# container scales down, or the DB drops them), so a pooled connection can be
+# dead by the next request. Pre-ping discards it and reconnects instead of
+# erroring. No-op for SQLite.
 engine = create_engine(
     settings.database_url,
     connect_args=_connect_args,
@@ -27,7 +28,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 if _is_sqlite:
     # SQLite ignores foreign keys unless this pragma is set per connection.
-    # Enable it so FK/orphan behaviour matches a real DB (e.g. Azure SQL) —
+    # Enable it so FK/orphan behaviour matches a real DB (e.g. Postgres) —
     # otherwise local and cloud disagree on what data is valid.
     @event.listens_for(engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_conn, _connection_record):

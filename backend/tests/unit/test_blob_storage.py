@@ -1,10 +1,10 @@
 """Unit tests for the blob-storage seam (`app/blob.py`).
 
 Uploaded IFC files and the GLBs the processor emits live in object storage
-(Azure Blob), not the database or local disk. This slice ships a *fake* store
-that drops the bytes but hands back a plausible presigned URL, so the rest of
-the pipeline (upload → process → serve GLB URL) works end to end before the real
-Azure client lands. These tests pin the interface every caller depends on.
+(Google Cloud Storage), not the database or local disk. This slice ships a
+*fake* store that drops the bytes but hands back a plausible signed URL, so the
+rest of the pipeline (upload → process → serve GLB URL) works end to end before
+the real GCS client lands. These tests pin the interface every caller depends on.
 """
 
 from app import blob
@@ -27,10 +27,10 @@ class TestFakeBlobStore:
         assert "modules/mod_abc.glb" in url
 
     def test_url_looks_presigned(self):
-        """A presigned Azure URL carries a SAS token in the query string; the
-        client just follows it without knowing the account key."""
+        """A GCS signed URL carries a signature in the query string; the client
+        just follows it without knowing any account key."""
         url = blob.FakeBlobStore().url_for("modules/mod_1.glb")
-        assert "?" in url and "sig=" in url
+        assert "?" in url and "X-Goog-Signature=" in url
 
     def test_distinct_keys_give_distinct_urls(self):
         store = blob.FakeBlobStore()

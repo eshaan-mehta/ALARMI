@@ -1,6 +1,6 @@
 """Unit tests for the shared infrastructure: `config.py`, `db.py`, `errors.py`.
 
-`DATABASE_URL` is the documented local↔Azure swap point (README, memory notes),
+`DATABASE_URL` is the documented local↔Cloud SQL swap point (README, memory notes),
 so the settings object and the engine it builds are part of the contract.
 """
 
@@ -23,9 +23,9 @@ class TestSettings:
         assert fresh.app_env == "local"
 
     def test_database_url_is_env_overridable(self, monkeypatch):
-        """The one knob that has to change for Azure SQL."""
-        monkeypatch.setenv("DATABASE_URL", "mssql+pyodbc://example")
-        assert Settings(_env_file=None).database_url == "mssql+pyodbc://example"
+        """The one knob that has to change for Cloud SQL (Postgres)."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql+pg8000://example")
+        assert Settings(_env_file=None).database_url == "postgresql+pg8000://example"
 
     @pytest.mark.parametrize(
         "origin",
@@ -124,9 +124,9 @@ class TestGetDb:
 @pytest.mark.policy
 class TestReferentialIntegrity:
     """SQLite ignores foreign keys unless `PRAGMA foreign_keys=ON` is issued per
-    connection. Without it the local DB silently accepts orphan rows while Azure
-    SQL (Table 6's FK constraint) would reject them — the two environments must
-    not diverge on data integrity.
+    connection. Without it the local DB silently accepts orphan rows while
+    Postgres (Table 6's FK constraint) would reject them — the two environments
+    must not diverge on data integrity.
     """
 
     def test_rejects_a_design_pointing_at_a_missing_project(self, db):

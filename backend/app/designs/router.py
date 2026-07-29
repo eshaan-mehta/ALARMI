@@ -45,8 +45,6 @@ def upload_design(
     if file is None:
         raise ApiError(400, "A file is required.")
     filename = file.filename or ""
-    if not filename.lower().endswith(".ifc"):
-        raise ApiError(400, "Only .ifc files are accepted.")
     size = file.size or 0
     if size == 0:
         raise ApiError(400, "The file is empty.")
