@@ -1,0 +1,51 @@
+# Redeploys the website to Firebase Hosting on push to main — only when the
+# frontend (or the Hosting config) changed.
+#
+# Repo secrets (shared with deploy-backend):
+#   GCP_SA_KEY       — same SA JSON; it also needs roles/firebasehosting.admin
+#   GCP_PROJECT_ID   — alarmi-fa0c6
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "firebase.json"
+      - ".firebaserc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Build
+        working-directory: website
+        run: |
+          npm ci
+          npm run build
+
+      # firebase.json lives at the repo root and points public → website/dist,
+      # so the deploy runs from root (entryPoint .).
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.GCP_SA_KEY }}
+          projectId: ${{ secrets.GCP_PROJECT_ID }}
+          channelId: live
+          entryPoint: .

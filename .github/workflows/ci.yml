@@ -1,0 +1,25 @@
+# Runs the backend test suite on PRs into main — only when backend/ changed.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen          # default + dev group (pytest, httpx)
+      - run: uv run pytest -q
