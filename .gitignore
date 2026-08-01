@@ -1,0 +1,8 @@
+# Firebase CLI local cache + logs (not source; regenerated on deploy)
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Never commit service-account keys
+key.json
+gha-creds-*.json
