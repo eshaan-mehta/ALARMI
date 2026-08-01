@@ -3,6 +3,10 @@
 firebase-debug.log
 firestore-debug.log
 
+# Vite dep-optimizer cache — a stray copy lands here if vite runs from the repo
+# root instead of website/ (the real one is website/node_modules/.vite)
+.vite/
+
 # Never commit service-account keys
 key.json
 gha-creds-*.json
