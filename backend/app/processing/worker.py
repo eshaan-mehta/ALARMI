@@ -31,13 +31,15 @@ def run_job(design_id: str) -> None:
             return
         try:
             store = get_blob_store()
-            modules = processor.extract(source_key(design_id), design.file_size)
+            modules = processor.extract(
+                source_key(design_id, design.file_name), design.file_size
+            )
             for data in modules:
                 module_id = new_id("mod")
                 db.add(Module(module_id=module_id, design_id=design_id, **data))
                 # Publish the module's GLB for the AR viewer. The real processor
                 # writes glTF bytes here; the fake store drops them.
-                store.put(glb_key(module_id), b"")
+                store.put(glb_key(design_id, module_id), b"")
             design.status = "COMPLETE"
             design.processed_time = now_iso()
             design.error = None

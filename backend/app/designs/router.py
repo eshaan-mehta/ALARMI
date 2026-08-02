@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -16,6 +18,8 @@ from ..modules.schemas import ModuleOut
 from ..processing import queue
 from . import repository as repo
 from .schemas import DesignOut, DesignRename, StatusOut
+
+logger = logging.getLogger("alarmi")
 
 # No prefix: these routes span two resource paths (/projects/{id}/designs and
 # /designs/{id}), so each declares its full path.
@@ -60,7 +64,9 @@ def upload_design(
     # extraction to the background so the upload returns immediately with status
     # PROCESSING. The client polls /status until the worker settles it.
     # NOTE: these actions must always remain sequential to avoid a race condition where the worker tries to read the blob before it is written.
-    blob.get_blob_store().put(blob.source_key(created.designId), file.file.read())
+    blob.get_blob_store().put(
+        blob.source_key(created.designId, filename), file.file.read()
+    )
     queue.enqueue(background_tasks, created.designId)
     return created
 
@@ -91,6 +97,14 @@ def rename_design(design_id: str, body: DesignRename, db: Session = Depends(get_
 def delete_design(design_id: str, db: Session = Depends(get_db)):
     if not repo.delete_design(db, design_id):
         raise ApiError(404, "Design not found.")
+    # Drop the design's objects too — its source and every module GLB sit under
+    # one prefix. Deliberately after the DB delete: if storage fails we're left
+    # with orphaned blobs (recoverable, and what the old code did unconditionally)
+    # rather than rows pointing at bytes that are already gone.
+    try:
+        blob.get_blob_store().delete_prefix(blob.design_prefix(design_id))
+    except Exception:  # noqa: BLE001 — the design *is* deleted; don't fail the request
+        logger.exception("Blob cleanup failed for %s", design_id)
     return Response(status_code=204)
 
 

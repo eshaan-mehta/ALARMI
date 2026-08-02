@@ -93,7 +93,7 @@ class TestSuccessfulRun:
         db.expire_all()
         ids = [m.module_id for m in db.scalars(select(Module).where(Module.design_id == "dsn_1")).all()]
         for module_id in ids:
-            assert blob.glb_key(module_id) in put_keys
+            assert blob.glb_key("dsn_1", module_id) in put_keys
 
 
 class TestFailedRun:

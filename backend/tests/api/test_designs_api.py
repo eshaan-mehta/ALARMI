@@ -216,6 +216,40 @@ class TestDeleteDesign:
         for module_id in module_ids:
             assert client.patch(f"/api/modules/{module_id}", json={"type": "X"}).status_code == 404
 
+    def test_takes_its_blobs_with_it(self, client, design):
+        """Deleting a design used to leave its source IFC and every module GLB
+        orphaned in the bucket forever — nothing ever removed them."""
+        from app import blob
+
+        store = blob.get_blob_store()
+        prefix = blob.design_prefix(design["designId"])
+        assert store.source_ref(design["designId"]).startswith(prefix)
+        client.delete(f"/api/designs/{design['designId']}")
+        with pytest.raises(LookupError):
+            store.source_ref(design["designId"])
+        assert store.delete_prefix(prefix) == 0  # nothing left under the prefix
+
+    def test_blob_cleanup_failure_still_deletes_the_design(self, client, design, monkeypatch):
+        """Storage is best-effort on the way out: the row is already gone, so a
+        failed wipe leaves orphans (recoverable) rather than a failed request."""
+        from app import blob
+
+        def _boom(_prefix):
+            raise RuntimeError("gcs down")
+
+        monkeypatch.setattr(blob.get_blob_store(), "delete_prefix", _boom)
+        assert client.delete(f"/api/designs/{design['designId']}").status_code == 204
+        assert client.get(f"/api/designs/{design['designId']}").status_code == 404
+
+    def test_leaves_another_designs_blobs_alone(self, client, project, upload_design):
+        from app import blob
+
+        store = blob.get_blob_store()
+        keep = upload_design(project["projectId"], name="Keep", filename="keep.ifc")
+        drop = upload_design(project["projectId"], name="Drop", filename="drop.ifc")
+        client.delete(f"/api/designs/{drop['designId']}")
+        assert store.source_ref(keep["designId"]).endswith("/keep.ifc")
+
     def test_deleting_twice_is_404(self, client, design):
         client.delete(f"/api/designs/{design['designId']}")
         res = client.delete(f"/api/designs/{design['designId']}")

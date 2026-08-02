@@ -15,6 +15,7 @@ def get_object_url(module_id: str, db: Session = Depends(get_db)):
     """Presigned URL to a module's GLB (design doc Table 4). The mobile app
     follows it to render the module in AR; web clients don't need it — they show
     metadata in a modal."""
-    if not modules_repo.module_exists(db, module_id):
+    design_id = modules_repo.design_id_for(db, module_id)
+    if design_id is None:
         raise ApiError(404, "Module not found.")
-    return ObjectUrlOut(url=get_blob_store().url_for(glb_key(module_id)))
+    return ObjectUrlOut(url=get_blob_store().url_for(glb_key(design_id, module_id)))

@@ -108,7 +108,17 @@ class TestAsyncProcessing:
         put_keys: list[str] = []
         monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
         created = _post(client, project["projectId"]).json()
-        assert blob.source_key(created["designId"]) in put_keys
+        assert blob.source_key(created["designId"], "ward-a.ifc") in put_keys
+
+    def test_the_source_keeps_the_uploaded_filename(self, client, project, monkeypatch):
+        """The bucket listing should read like the user's uploads, so the key
+        carries the original name rather than a fixed 'source.ifc'."""
+        from app import blob
+
+        put_keys: list[str] = []
+        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
+        created = _post(client, project["projectId"], filename="Ward A Rev 2.ifc").json()
+        assert f"designs/{created['designId']}/Ward A Rev 2.ifc" in put_keys
 
 
 class TestUploadValidation:
