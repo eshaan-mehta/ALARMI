@@ -121,6 +121,52 @@ class TestAsyncProcessing:
         assert f"designs/{created['designId']}/Ward A Rev 2.ifc" in put_keys
 
 
+class TestUploadedFilenamesInStorage:
+    """Where a given uploaded filename actually lands, driven end to end.
+
+    The key is the user-visible artefact — it's what shows up in the bucket
+    browser — so these go through the real endpoint rather than calling the
+    sanitiser directly.
+    """
+
+    def _key_for(self, client, project, monkeypatch, filename):
+        from app import blob
+
+        put_keys: list[str] = []
+        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
+        created = _post(client, project["projectId"], filename=filename).json()
+        prefix = f"designs/{created['designId']}/"
+        return next(k for k in put_keys if k.startswith(prefix) and "/" not in k[len(prefix) :])
+
+    def test_an_ordinary_name_is_untouched(self, client, project, monkeypatch):
+        assert self._key_for(client, project, monkeypatch, "ward-a.ifc").endswith("/ward-a.ifc")
+
+    def test_spaces_and_unicode_survive(self, client, project, monkeypatch):
+        key = self._key_for(client, project, monkeypatch, "Étage 1 (rev 2).ifc")
+        assert key.endswith("/Étage 1 (rev 2).ifc")
+
+    def test_a_path_does_not_become_a_nested_folder(self, client, project, monkeypatch):
+        """A '/' in the name would silently add a directory level inside the
+        design's prefix, which would then look like a module GLB path."""
+        key = self._key_for(client, project, monkeypatch, "Floor 1/rev 2.ifc")
+        assert key.endswith("/rev 2.ifc")
+
+    def test_a_degenerate_name_falls_back(self, client, project, monkeypatch):
+        for name in ("..", "."):
+            key = self._key_for(client, project, monkeypatch, name)
+            assert key.endswith("/source.ifc")
+
+    def test_the_stored_name_matches_what_the_api_reports(self, client, project, monkeypatch):
+        """`fileName` in the response and the object in the bucket should not
+        drift apart for a name that needed no sanitising."""
+        from app import blob
+
+        put_keys: list[str] = []
+        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
+        created = _post(client, project["projectId"], filename="Ward A.ifc").json()
+        assert blob.source_key(created["designId"], created["fileName"]) in put_keys
+
+
 class TestUploadValidation:
     def test_unknown_project_is_404(self, client):
         res = _post(client, "prj_missing")

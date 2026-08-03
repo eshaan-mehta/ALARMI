@@ -168,11 +168,17 @@ class GcsBlobStore:
 
     _URL_TTL_HOURS = 1
 
-    def __init__(self, bucket: str) -> None:
-        from google.cloud import storage
+    def __init__(self, bucket: str, client=None) -> None:
+        # ``client`` is a seam: production leaves it None and gets a real
+        # storage.Client (imported here so the gcp extra stays optional), while
+        # tests inject a double to exercise this class's list/delete logic
+        # without credentials.
+        if client is None:
+            from google.cloud import storage
 
-        self._client = storage.Client()
-        self._bucket = self._client.bucket(bucket)
+            client = storage.Client()
+        self._client = client
+        self._bucket = client.bucket(bucket)
 
     def put(self, key: str, data: bytes) -> None:
         self._bucket.blob(key).upload_from_string(data)
@@ -205,11 +211,12 @@ class GcsBlobStore:
         return _exactly_one_source(design_id, [b.name for b in blobs])
 
     def delete_prefix(self, prefix: str) -> int:
-        deleted = 0
-        for b in self._bucket.list_blobs(prefix=prefix):
+        # Materialised before deleting: list_blobs is a lazy paged iterator, and
+        # mutating the listing while paging through it is asking for skips.
+        doomed = list(self._bucket.list_blobs(prefix=prefix))
+        for b in doomed:
             b.delete()
-            deleted += 1
-        return deleted
+        return len(doomed)
 
 
 @lru_cache(maxsize=1)
