@@ -52,6 +52,17 @@ gcloud run deploy "$SERVICE" \
   "${CLOUDSQL_FLAG[@]}" \
   --set-env-vars "$ENV"
 
+# The web viewer fetches GLBs straight from GCS with XHR, so the bucket has to
+# send Access-Control-Allow-Origin — a signed URL authorises the *request*, but
+# CORS is what lets the page *read the response*. Without this the browser
+# discards bytes it successfully downloaded and model-viewer reports a load
+# failure that looks identical to a missing file. Idempotent: the policy is
+# replaced wholesale each run.
+if [ -n "$BUCKET" ]; then
+  echo "==> Applying CORS policy to gs://$BUCKET"
+  gcloud storage buckets update "gs://$BUCKET" --cors-file=gcs-cors.json
+fi
+
 URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
 echo
 echo "==> Deployed. $URL/api/health"
