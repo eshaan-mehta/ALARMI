@@ -30,6 +30,15 @@ _FALLBACK_NAME = "source.ifc"
 # GCS caps object names at 1024 bytes UTF-8. Leave generous room for the prefix.
 _MAX_NAME_BYTES = 512
 
+# ``model/gltf-binary`` is the registered type for .glb. IFC has no IANA
+# registration; ``application/x-step`` is the conventional choice for a STEP
+# physical file, which is what an IFC-SPF file is.
+_CONTENT_TYPES = {
+    ".glb": "model/gltf-binary",
+    ".ifc": "application/x-step",
+}
+_FALLBACK_TYPE = "application/octet-stream"
+
 
 def safe_filename(filename: str) -> str:
     """The uploaded filename, reduced to something usable as a GCS object name.
@@ -73,6 +82,19 @@ def source_key(design_id: str, filename: str) -> str:
 def glb_key(design_id: str, module_id: str) -> str:
     """Blob key for a module's GLB — what the AR viewer downloads."""
     return f"{design_prefix(design_id)}modules/{module_id}.glb"
+
+
+def content_type_for(key: str) -> str:
+    """MIME type an object should be stored under, from its key's extension.
+
+    Uploading without declaring one leaves GCS to guess, and it settles on
+    ``text/plain`` — wrong for both things this app stores, and a lie any strict
+    consumer (a CDN deciding how to compress or cache, a client that trusts the
+    header instead of sniffing) is entitled to act on. Keys are built by
+    ``source_key`` / ``glb_key`` right here, so the extension is reliable.
+    """
+    _, dot, ext = key.rpartition(".")
+    return _CONTENT_TYPES.get(f".{ext.lower()}", _FALLBACK_TYPE) if dot else _FALLBACK_TYPE
 
 
 def is_source_key(key: str, design_id: str) -> bool:
@@ -181,7 +203,9 @@ class GcsBlobStore:
         self._bucket = client.bucket(bucket)
 
     def put(self, key: str, data: bytes) -> None:
-        self._bucket.blob(key).upload_from_string(data)
+        self._bucket.blob(key).upload_from_string(
+            data, content_type=content_type_for(key)
+        )
 
     def url_for(self, key: str) -> str:
         from datetime import timedelta

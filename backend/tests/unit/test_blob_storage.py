@@ -26,8 +26,9 @@ class _StubBlob:
         self._bucket = bucket
         self.name = name
 
-    def upload_from_string(self, data: bytes) -> None:
+    def upload_from_string(self, data: bytes, content_type: str | None = None) -> None:
         self._bucket.objects[self.name] = data
+        self._bucket.content_types[self.name] = content_type
 
     def delete(self) -> None:
         self._bucket.objects.pop(self.name, None)
@@ -46,6 +47,7 @@ class _StubBucket:
     def __init__(self, name: str) -> None:
         self.name = name
         self.objects: dict[str, bytes] = {}
+        self.content_types: dict[str, str | None] = {}
 
     def blob(self, name: str) -> _StubBlob:
         return _StubBlob(self, name)
@@ -198,6 +200,22 @@ class TestGcsBlobStoreWiring:
         store.put("designs/dsn_1/ward.ifc", b"ISO-10303-21;")
         assert client.bucket("test-bucket").objects["designs/dsn_1/ward.ifc"] == b"ISO-10303-21;"
 
+    def test_a_glb_is_stored_as_gltf_binary(self):
+        """Left undeclared, GCS labels the object text/plain — which is what the
+        deployed viewer was served before this was wired up."""
+        client = _StubGcsClient()
+        store = blob.GcsBlobStore("test-bucket", client=client)
+        key = blob.glb_key("dsn_1", "mod_1")
+        store.put(key, b"glTF")
+        assert client.bucket("test-bucket").content_types[key] == "model/gltf-binary"
+
+    def test_an_uploaded_source_is_stored_as_a_step_file(self):
+        client = _StubGcsClient()
+        store = blob.GcsBlobStore("test-bucket", client=client)
+        key = blob.source_key("dsn_1", "ward-a.ifc")
+        store.put(key, b"ISO-10303-21;")
+        assert client.bucket("test-bucket").content_types[key] == "application/x-step"
+
     def test_delete_actually_removes_objects_not_just_counts_them(self):
         """delete_prefix returns a count; make sure the count isn't the only
         thing that happens."""
@@ -254,6 +272,31 @@ class TestKeyHelpers:
     def test_same_filename_in_two_designs_does_not_collide(self):
         """Uniqueness comes from the design id, not the name."""
         assert blob.source_key("dsn_1", "model.ifc") != blob.source_key("dsn_2", "model.ifc")
+
+
+class TestContentTypeFor:
+    def test_a_glb_key_maps_to_the_registered_gltf_type(self):
+        assert blob.content_type_for(blob.glb_key("dsn_1", "mod_1")) == "model/gltf-binary"
+
+    def test_an_ifc_key_maps_to_step(self):
+        assert blob.content_type_for(blob.source_key("dsn_1", "a.ifc")) == "application/x-step"
+
+    def test_the_extension_is_matched_case_insensitively(self):
+        """Uploaded filenames survive verbatim, so 'WARD.IFC' reaches the key."""
+        assert blob.content_type_for("designs/dsn_1/WARD.IFC") == "application/x-step"
+
+    def test_an_unknown_extension_falls_back_to_binary(self):
+        """Never text/plain — a wrong type a client might trust is worse than an
+        honestly opaque one."""
+        assert blob.content_type_for("designs/dsn_1/notes.xyz") == "application/octet-stream"
+
+    def test_a_key_with_no_extension_falls_back_to_binary(self):
+        assert blob.content_type_for("designs/dsn_1/README") == "application/octet-stream"
+
+    def test_a_dot_in_a_directory_segment_is_not_read_as_an_extension(self):
+        """rpartition looks at the last dot in the whole key, so a name that has
+        none of its own must not inherit one from earlier in the path."""
+        assert blob.content_type_for("designs/dsn.1/source") == "application/octet-stream"
 
 
 class TestSafeFilename:
