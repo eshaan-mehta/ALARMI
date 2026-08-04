@@ -2,7 +2,7 @@
 
 Uploaded IFC files and the GLBs the processor emits live in object storage
 (Google Cloud Storage), not the database or local disk. Local dev and tests use
-a *fake* store that drops the bytes but keeps the keys; Cloud Run uses the real
+a *fake* store that keeps objects in process memory; Cloud Run uses the real
 ``GcsBlobStore``.
 
 The important structure here is ``BlobStoreContract``: the behaviour every store
@@ -28,6 +28,11 @@ class _StubBlob:
 
     def upload_from_string(self, data: bytes) -> None:
         self._bucket.objects[self.name] = data
+
+    def download_as_bytes(self) -> bytes:
+        # Real GCS raises google.cloud.exceptions.NotFound here; KeyError is the
+        # closest thing available without importing the SDK.
+        return self._bucket.objects[self.name]
 
     def delete(self) -> None:
         self._bucket.objects.pop(self.name, None)
@@ -104,6 +109,26 @@ class BlobStoreContract:
     def test_a_stored_source_is_found_without_knowing_its_name(self, store):
         store.put(blob.source_key("dsn_1", "ward-a.ifc"), b"ISO-10303-21;")
         assert store.source_ref("dsn_1") == "designs/dsn_1/ward-a.ifc"
+
+    def test_stored_bytes_come_back_byte_for_byte(self, store):
+        """The processing worker reads back the IFC the upload handler wrote, so
+        a store that only remembers keys isn't enough."""
+        key = blob.source_key("dsn_1", "ward-a.ifc")
+        store.put(key, b"ISO-10303-21;\nHEADER;\n\x00\xff binary tail")
+        assert store.get(key) == b"ISO-10303-21;\nHEADER;\n\x00\xff binary tail"
+
+    def test_a_rewritten_object_reads_back_as_the_new_bytes(self, store):
+        key = blob.glb_key("dsn_1", "mod_1")
+        store.put(key, b"glTF-old")
+        store.put(key, b"glTF-new")
+        assert store.get(key) == b"glTF-new"
+
+    def test_reading_a_deleted_object_fails(self, store):
+        key = blob.source_key("dsn_1", "ward-a.ifc")
+        store.put(key, b"x")
+        store.delete_prefix(blob.design_prefix("dsn_1"))
+        with pytest.raises(Exception):  # noqa: B017 — KeyError / NotFound
+            store.get(key)
 
     def test_module_glbs_are_not_mistaken_for_the_source(self, store):
         """GLBs live one level deeper, under modules/. The lookup must skip
@@ -218,10 +243,16 @@ class TestFakeBlobStore:
     def test_put_accepts_bytes_and_returns_nothing(self):
         assert blob.FakeBlobStore().put("designs/dsn_1/source.ifc", b"ISO-10303-21;") is None
 
-    def test_put_drops_arbitrary_sizes_without_error(self):
+    def test_put_takes_arbitrary_sizes(self):
         store = blob.FakeBlobStore()
         store.put("empty", b"")
         store.put("largeish", b"x" * 100_000)
+        assert store.get("empty") == b""
+        assert store.get("largeish") == b"x" * 100_000
+
+    def test_getting_an_unknown_key_raises(self):
+        with pytest.raises(KeyError):
+            blob.FakeBlobStore().get("designs/dsn_1/never-written.ifc")
 
     def test_url_for_is_an_absolute_http_url(self):
         assert blob.FakeBlobStore().url_for("modules/mod_1.glb").startswith("http")

@@ -10,6 +10,10 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "python-multipart>=0.0.9",
+    "ifcopenshell>=0.8",
+    "trimesh>=4.0",
+    "numpy>=1.26",
+    "scipy>=1.13",
 ]
 
 # Deploy-only deps. Kept out of the default install so local dev + tests need no

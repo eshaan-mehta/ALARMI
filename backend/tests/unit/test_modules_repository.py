@@ -11,15 +11,15 @@ from app.modules import repository as repo
 from app.modules.models import Module
 from app.processing.worker import run_job
 from app.projects import repository as projects_repo
-from conftest import MODULE_FIELDS
+from conftest import MIN_IFC_SIZE, MODULE_FIELDS, store_source
 
 
 def _module(db) -> str:
     """A module belonging to a fully-processed design. Extraction is async now,
-    so we run the worker (delay 0 in tests) to produce the modules an upload
-    used to create synchronously."""
+    so we store the source and run the worker over it, the way an upload does."""
     project_id = projects_repo.create_project(db, "P", "Waterloo, ON").projectId
-    design = designs_repo.create_design(db, project_id, "D", "d.ifc", 1024)
+    design = designs_repo.create_design(db, project_id, "D", "d.ifc", MIN_IFC_SIZE)
+    store_source(design.designId, "d.ifc")
     run_job(design.designId)
     db.expire_all()
     return designs_repo.list_modules(db, design.designId)[0].moduleId

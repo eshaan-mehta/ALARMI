@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from conftest import STATUSES, UNIT_SCALES, ifc_bytes
+from conftest import MIN_IFC_SIZE, STATUSES, UNIT_SCALES, ifc_bytes
 
 
 def _upload(client, project_id, name, filename, size=None):
@@ -112,11 +112,11 @@ class TestMultiProjectIsolation:
         ).json()
 
         clinic_designs = [
-            _upload(client, clinic["projectId"], f"Clinic {i}", f"clinic-{i}.ifc", 400 + i).json()
+            _upload(client, clinic["projectId"], f"Clinic {i}", f"clinic-{i}.ifc", MIN_IFC_SIZE + i).json()
             for i in range(3)
         ]
         office_design = _upload(
-            client, office["projectId"], "Office 1", "office-1.ifc", 500
+            client, office["projectId"], "Office 1", "office-1.ifc", MIN_IFC_SIZE + 500
         ).json()
 
         listed_clinic = client.get(f"/api/projects/{clinic['projectId']}/designs").json()
@@ -153,7 +153,7 @@ class TestModuleIdentityAcrossDesigns:
             ).json()
             for d in range(3):
                 design = _upload(
-                    client, project["projectId"], f"D{d}", f"d{d}.ifc", 300 + d
+                    client, project["projectId"], f"D{d}", f"d{d}.ifc", MIN_IFC_SIZE + d
                 ).json()
                 ids = [
                     m["moduleId"]
@@ -193,7 +193,7 @@ class TestRepeatedOperations:
         """Counts must be derived, not accumulated."""
         project = client.post("/api/projects", json={"name": "Churn", "location": "X"}).json()
         for i in range(5):
-            design = _upload(client, project["projectId"], f"D{i}", f"d{i}.ifc", 300 + i).json()
+            design = _upload(client, project["projectId"], f"D{i}", f"d{i}.ifc", MIN_IFC_SIZE + i).json()
             assert client.get("/api/projects/all_projects").json()[0]["designCount"] == 1
             client.delete(f"/api/designs/{design['designId']}")
             assert client.get("/api/projects/all_projects").json()[0]["designCount"] == 0
@@ -209,7 +209,7 @@ class TestRepeatedOperations:
     def test_a_project_holds_many_designs(self, client, count):
         project = client.post("/api/projects", json={"name": "Big", "location": "X"}).json()
         for i in range(count):
-            assert _upload(client, project["projectId"], f"D{i}", f"d{i}.ifc", 300 + i).status_code == 201
+            assert _upload(client, project["projectId"], f"D{i}", f"d{i}.ifc", MIN_IFC_SIZE + i).status_code == 201
         listed = client.get(f"/api/projects/{project['projectId']}/designs").json()
         assert len(listed) == count
         assert len({d["designId"] for d in listed}) == count

@@ -1,8 +1,9 @@
 """The processing job.
 
-``run_job`` is what actually turns an uploaded design into modules: it calls the
-extractor seam, persists the extracted metadata, publishes a GLB per module to
-blob storage, and moves the design into a terminal status (COMPLETE or ERROR).
+``run_job`` is what actually turns an uploaded design into modules: it reads the
+uploaded IFC back from blob storage, hands it to the extractor seam, persists
+the extracted metadata, publishes each module's GLB to blob storage, and moves
+the design into a terminal status (COMPLETE or ERROR).
 
 It runs *off* the request (enqueued via ``queue.enqueue``), so it opens its own
 DB session — the request that scheduled it has already returned and closed its
@@ -31,15 +32,15 @@ def run_job(design_id: str) -> None:
             return
         try:
             store = get_blob_store()
-            modules = processor.extract(
-                source_key(design_id, design.file_name), design.file_size
-            )
-            for data in modules:
+            # The upload handler wrote the source before enqueuing this job, so
+            # the bytes are there to be read back.
+            source = store.get(source_key(design_id, design.file_name))
+            for module in processor.extract(source):
                 module_id = new_id("mod")
-                db.add(Module(module_id=module_id, design_id=design_id, **data))
-                # Publish the module's GLB for the AR viewer. The real processor
-                # writes glTF bytes here; the fake store drops them.
-                store.put(glb_key(design_id, module_id), b"")
+                db.add(Module(module_id=module_id, design_id=design_id, **module.metadata))
+                # Publish the module's GLB for the AR viewer to download via
+                # /objects/get_url/{moduleId}.
+                store.put(glb_key(design_id, module_id), module.glb)
             design.status = "COMPLETE"
             design.processed_time = now_iso()
             design.error = None

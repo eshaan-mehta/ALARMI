@@ -1,10 +1,10 @@
 """Unit tests for the async processing worker (`app/processing/worker.py`).
 
-The worker is the scaffolding the IFC-processing team plugs into: it runs off
-the request (enqueued as a background task), calls the stubbed extractor,
-persists the extracted modules, publishes a GLB per module, and moves the design
-into a terminal status. It owns its own DB session because the request that
-enqueued it is already gone by the time it runs.
+The worker runs off the request (enqueued as a background task): it reads the
+uploaded IFC back out of blob storage, hands it to the extractor, persists the
+extracted modules, publishes each module's GLB, and moves the design into a
+terminal status. It owns its own DB session because the request that enqueued it
+is already gone by the time it runs.
 """
 
 from sqlalchemy import select
@@ -14,24 +14,39 @@ from app.designs.models import Design
 from app.modules.models import Module
 from app.processing import worker
 from app.projects.models import Project
-from conftest import UNIT_SCALES
+from conftest import (
+    SAMPLE_DIMENSIONS,
+    SAMPLE_TYPE,
+    UNIT_SCALES,
+    empty_ifc_bytes,
+    ifc_bytes,
+    store_source,
+)
 
 
-def _stored_processing_design(db, design_id="dsn_1") -> str:
-    """A design sitting in PROCESSING, the state the worker picks up."""
+def _stored_processing_design(db, design_id="dsn_1", source: bytes | None = None) -> str:
+    """A design sitting in PROCESSING with its source in blob storage — the
+    state an upload leaves behind, and the state the worker picks up.
+
+    ``source=b""`` skips the blob write, for the tests about a missing source.
+    """
     db.add(
         Project(
             project_id="prj_1", name="P", location="X",
             created_time="2026-01-01T00:00:00+00:00",
         )
     )
+    payload = ifc_bytes() if source is None else source
     db.add(
         Design(
             design_id=design_id, project_id="prj_1", name="D", file_name="d.ifc",
-            file_size=1024, status="PROCESSING", upload_time="2026-01-01T00:00:00+00:00",
+            file_size=len(payload), status="PROCESSING",
+            upload_time="2026-01-01T00:00:00+00:00",
         )
     )
     db.commit()
+    if payload:
+        store_source(design_id, "d.ifc", payload)
     return design_id
 
 
@@ -75,6 +90,16 @@ class TestSuccessfulRun:
             assert set(m.dimensions) == {"x", "y", "z"}
             assert all(v > 0 for v in m.dimensions.values())
 
+    def test_the_metadata_comes_from_the_file_not_from_thin_air(self, db):
+        """The stub used to fabricate metadata from the byte count. These values
+        are the sample IFC's actual wall, so a regression to fabrication shows."""
+        _stored_processing_design(db)
+        worker.run_job("dsn_1")
+        db.expire_all()
+        module = db.scalars(select(Module).where(Module.design_id == "dsn_1")).one()
+        assert module.type == SAMPLE_TYPE
+        assert module.dimensions == SAMPLE_DIMENSIONS
+
     def test_module_ids_are_unique_and_prefixed(self, db):
         _stored_processing_design(db)
         worker.run_job("dsn_1")
@@ -83,17 +108,35 @@ class TestSuccessfulRun:
         assert len(ids) == len(set(ids))
         assert all(i.startswith("mod_") for i in ids)
 
-    def test_publishes_a_glb_for_every_module(self, db, monkeypatch):
+    def test_publishes_a_glb_for_every_module(self, db):
         """The AR viewer downloads each module's GLB — the worker must publish
         one per module under its id, so the object URL endpoint can point at it."""
-        put_keys: list[str] = []
-        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
         _stored_processing_design(db)
         worker.run_job("dsn_1")
         db.expire_all()
+        store = blob.get_blob_store()
         ids = [m.module_id for m in db.scalars(select(Module).where(Module.design_id == "dsn_1")).all()]
+        assert ids
         for module_id in ids:
-            assert blob.glb_key("dsn_1", module_id) in put_keys
+            assert store.get(blob.glb_key("dsn_1", module_id))
+
+    def test_the_published_glb_is_real_geometry(self, db):
+        """Not an empty placeholder: a glTF binary starts with the `glTF` magic,
+        and this one carries the sample's wall and door."""
+        _stored_processing_design(db)
+        worker.run_job("dsn_1")
+        db.expire_all()
+        module = db.scalars(select(Module).where(Module.design_id == "dsn_1")).one()
+        glb = blob.get_blob_store().get(blob.glb_key("dsn_1", module.module_id))
+        assert glb.startswith(b"glTF")
+        assert len(glb) > 1000
+
+    def test_the_uploaded_source_is_left_alone(self, db):
+        """Processing reads the source; it must not consume or overwrite it."""
+        payload = ifc_bytes()
+        _stored_processing_design(db)
+        worker.run_job("dsn_1")
+        assert blob.get_blob_store().get(blob.source_key("dsn_1", "d.ifc")) == payload
 
 
 class TestFailedRun:
@@ -118,6 +161,30 @@ class TestFailedRun:
         worker.run_job("dsn_1")
         db.expire_all()
         assert db.scalars(select(Module).where(Module.design_id == "dsn_1")).all() == []
+
+    def test_an_ifc_with_no_geometry_is_an_error(self, db):
+        """A file that parses but holds nothing to draw yields no module. Better
+        a design the user can see failed than one that looks processed."""
+        _stored_processing_design(db, source=empty_ifc_bytes())
+        worker.run_job("dsn_1")
+        db.expire_all()
+        assert db.get(Design, "dsn_1").status == "ERROR"
+        assert db.scalars(select(Module).where(Module.design_id == "dsn_1")).all() == []
+
+    def test_an_unparseable_file_is_an_error(self, db):
+        _stored_processing_design(db, source=b"this is not an IFC file")
+        worker.run_job("dsn_1")
+        db.expire_all()
+        assert db.get(Design, "dsn_1").status == "ERROR"
+
+    def test_a_missing_source_is_an_error(self, db):
+        """Nothing writes a design row without also storing its source, but if
+        the object is gone the worker has nothing to parse — it must not sit in
+        PROCESSING forever."""
+        _stored_processing_design(db, source=b"")
+        worker.run_job("dsn_1")
+        db.expire_all()
+        assert db.get(Design, "dsn_1").status == "ERROR"
 
 
 class TestMissingDesign:

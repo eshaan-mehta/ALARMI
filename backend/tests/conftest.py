@@ -18,15 +18,11 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="alarmi-tests-"))
 _DB_PATH = _TMP_DIR / "test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB_PATH}"
 os.environ["APP_ENV"] = "test"
-# The stub extractor sleeps this long before a design flips to COMPLETE. Zero in
-# tests so the enqueued job finishes instantly (the in-process TestClient runs it
-# before the upload call even returns). This env also reaches the live-server
-# subprocess via os.environ.
-os.environ["PROCESSING_DELAY_SECONDS"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app import blob  # noqa: E402
 from app.db import Base, SessionLocal, engine, init_db  # noqa: E402
 from app.designs.models import Design  # noqa: E402
 from app.main import app  # noqa: E402
@@ -63,36 +59,63 @@ DESIGN_FIELDS = {
 #: Fields of the `Module` the web client requires (designs/types.ts).
 MODULE_FIELDS = {"moduleId", "type", "dimensions", "roomId", "unitScale"}
 
-_IFC_HEAD = (
-    b"ISO-10303-21;\n"
-    b"HEADER;\n"
-    b"FILE_DESCRIPTION((''),'2;1');\n"
-    b"FILE_NAME('test.ifc','2026-01-01T00:00:00',(''),(''),'','','');\n"
-    b"FILE_SCHEMA(('IFC4'));\n"
-    b"ENDSEC;\n"
-    b"DATA;\n"
-)
-_IFC_TAIL = b"ENDSEC;\nEND-ISO-10303-21;\n"
+# ---------------------------------------------------------------------------
+# IFC payloads
+# ---------------------------------------------------------------------------
 
-MIN_IFC_SIZE = len(_IFC_HEAD) + len(_IFC_TAIL)
+#: A real IFC4 file: one wall, one door, and the opening the door sits in.
+#: The processor parses this for real now, so a hand-rolled stand-in won't do —
+#: a file with no geometry is an ERROR, not a design.
+SAMPLE_IFC = (Path(__file__).parent / "fixtures" / "SimpleWall.ifc").read_bytes()
+
+MIN_IFC_SIZE = len(SAMPLE_IFC)
+
+#: What `SAMPLE_IFC` extracts to, in metres (the door and wall merged; the
+#: opening is a void and is skipped). Asserted wherever real dimensions matter.
+SAMPLE_DIMENSIONS = {"x": 4.0, "y": 0.25, "z": 4.0}
+
+#: The IfcElement subtype contributing the most geometry, humanised.
+SAMPLE_TYPE = "Wall Standard Case"
+
+# The comment is inserted *inside* the DATA section, before the closing ENDSEC;,
+# so padding can't disturb the header or the final terminator.
+_PAD_ANCHOR = SAMPLE_IFC.rfind(b"ENDSEC;")
 
 
 def ifc_bytes(size: int | None = None) -> bytes:
-    """A syntactically plausible IFC payload, padded to exactly ``size`` bytes.
+    """The sample IFC, padded to exactly ``size`` bytes.
 
-    Padding goes in a STEP comment so the file stays well-formed. ``size`` must
-    be at least :data:`MIN_IFC_SIZE`.
+    Padding goes in a STEP comment so the file still parses and still yields its
+    geometry. ``size`` must be at least :data:`MIN_IFC_SIZE` — there is no way to
+    make a real IFC smaller by padding it.
     """
     if size is None:
-        return _IFC_HEAD + _IFC_TAIL
+        return SAMPLE_IFC
     if size < MIN_IFC_SIZE:
         raise ValueError(f"size must be >= {MIN_IFC_SIZE}")
     pad = size - MIN_IFC_SIZE
     if pad == 0:
-        return _IFC_HEAD + _IFC_TAIL
+        return SAMPLE_IFC
     if pad < 4:  # too small for a "/* */" comment — pad with newlines instead
-        return _IFC_HEAD + b"\n" * pad + _IFC_TAIL
-    return _IFC_HEAD + b"/*" + b"x" * (pad - 4) + b"*/" + _IFC_TAIL
+        return SAMPLE_IFC[:_PAD_ANCHOR] + b"\n" * pad + SAMPLE_IFC[_PAD_ANCHOR:]
+    body = b"/*" + b"x" * (pad - 4) + b"*/"
+    return SAMPLE_IFC[:_PAD_ANCHOR] + body + SAMPLE_IFC[_PAD_ANCHOR:]
+
+
+def empty_ifc_bytes() -> bytes:
+    """A well-formed IFC that declares nothing: it parses, but there is not a
+    single element to draw. The processor rejects it."""
+    return (
+        b"ISO-10303-21;\n"
+        b"HEADER;\n"
+        b"FILE_DESCRIPTION((''),'2;1');\n"
+        b"FILE_NAME('empty.ifc','2026-01-01T00:00:00',(''),(''),'','','');\n"
+        b"FILE_SCHEMA(('IFC4'));\n"
+        b"ENDSEC;\n"
+        b"DATA;\n"
+        b"ENDSEC;\n"
+        b"END-ISO-10303-21;\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +173,8 @@ def upload_design(client):
     Upload now returns immediately with status PROCESSING; the extraction runs as
     a background job. Under the in-process TestClient that job finishes before the
     upload call returns, so a re-read reflects the COMPLETE design (with its
-    modules) that the rest of the suite asserts against. ``size`` controls the
-    payload length exactly, which drives the stub's fabricated module count.
+    modules) that the rest of the suite asserts against. ``size`` pads the
+    payload to an exact length, for the tests that assert on byte counts.
     """
 
     def _upload(
@@ -200,5 +223,17 @@ def project(make_project) -> dict:
 
 @pytest.fixture
 def design(project, upload_design) -> dict:
-    """A design whose stub processing fabricates the maximum 3 modules."""
-    return upload_design(project["projectId"], size=MIN_IFC_SIZE + (2 - MIN_IFC_SIZE % 3) % 3)
+    """A settled design: the sample IFC, extracted into its single module."""
+    return upload_design(project["projectId"])
+
+
+def store_source(design_id: str, file_name: str, content: bytes | None = None) -> bytes:
+    """Put a design's IFC in blob storage, the way the upload endpoint does.
+
+    Unit tests that create a `Design` row directly and then call `run_job` have
+    to do this themselves: the worker reads the source back out of storage, so a
+    design with no stored bytes fails to process (which is its own test).
+    """
+    payload = ifc_bytes() if content is None else content
+    blob.get_blob_store().put(blob.source_key(design_id, file_name), payload)
+    return payload

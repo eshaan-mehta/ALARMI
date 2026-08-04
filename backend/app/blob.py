@@ -1,10 +1,10 @@
 """Blob storage seam (Google Cloud Storage).
 
 Uploaded IFC files and the GLBs the processor emits belong in object storage,
-not the database or local disk. This slice ships a *fake* store: it accepts
-writes, drops the bytes, and hands back a plausible V4-signed URL. Swapping in a
-real ``GcsBlobStore`` on deploy is a one-line change in ``get_blob_store`` —
-every caller already speaks the ``put`` / ``url_for`` interface.
+not the database or local disk. This slice ships a *fake* store: it keeps the
+bytes in memory and hands back a plausible V4-signed URL. Swapping in a real
+``GcsBlobStore`` on deploy is a one-line change in ``get_blob_store`` — every
+caller already speaks the ``put`` / ``get`` / ``url_for`` interface.
 
 Everything a design owns lives under one prefix::
 
@@ -108,6 +108,8 @@ class BlobStore(Protocol):
 
     def put(self, key: str, data: bytes) -> None: ...
 
+    def get(self, key: str) -> bytes: ...
+
     def url_for(self, key: str) -> str: ...
 
     def source_ref(self, design_id: str) -> str: ...
@@ -116,23 +118,26 @@ class BlobStore(Protocol):
 
 
 class FakeBlobStore:
-    """Stand-in for GCS until the real client lands. Bytes are accepted and
-    discarded; ``url_for`` returns a signed-URL-shaped link a client can treat
+    """Stand-in for GCS until the real client lands. Objects are held in process
+    memory; ``url_for`` returns a signed-URL-shaped link a client can treat
     exactly like a real one (it just won't resolve).
 
-    Keys *are* retained — only the payloads are dropped — so ``source_ref`` and
-    ``delete_prefix`` answer the same questions the real store answers with a
-    list call, and local dev exercises those paths for real."""
+    Payloads are kept, not dropped: the processing worker reads back the IFC it
+    was handed at upload, so local dev has to round-trip real bytes. That makes
+    the store a per-process cache that only ``delete_prefix`` frees — fine for
+    dev and tests, which is all it is ever wired into."""
 
     def __init__(self, bucket: str = "alarmi") -> None:
         self._bucket = bucket
-        self._keys: set[str] = set()
+        self._objects: dict[str, bytes] = {}
 
     def put(self, key: str, data: bytes) -> None:
-        # Payload intentionally dropped. A real GcsBlobStore streams it into the
-        # bucket; keeping the call site means swapping the impl needs no new
-        # wiring at the callers.
-        self._keys.add(key)
+        self._objects[key] = data
+
+    def get(self, key: str) -> bytes:
+        # KeyError on a missing object, mirroring the real store's NotFound:
+        # nothing in the app can carry on without the bytes it asked for.
+        return self._objects[key]
 
     def url_for(self, key: str) -> str:
         base = f"https://storage.googleapis.com/{self._bucket}/{key}"
@@ -145,12 +150,13 @@ class FakeBlobStore:
 
     def source_ref(self, design_id: str) -> str:
         return _exactly_one_source(
-            design_id, [k for k in self._keys if is_source_key(k, design_id)]
+            design_id, [k for k in self._objects if is_source_key(k, design_id)]
         )
 
     def delete_prefix(self, prefix: str) -> int:
-        doomed = {k for k in self._keys if k.startswith(prefix)}
-        self._keys -= doomed
+        doomed = [k for k in self._objects if k.startswith(prefix)]
+        for key in doomed:
+            del self._objects[key]
         return len(doomed)
 
 
@@ -182,6 +188,9 @@ class GcsBlobStore:
 
     def put(self, key: str, data: bytes) -> None:
         self._bucket.blob(key).upload_from_string(data)
+
+    def get(self, key: str) -> bytes:
+        return self._bucket.blob(key).download_as_bytes()
 
     def url_for(self, key: str) -> str:
         from datetime import timedelta

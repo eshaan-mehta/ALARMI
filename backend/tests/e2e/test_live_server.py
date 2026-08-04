@@ -17,7 +17,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from conftest import ifc_bytes
+from conftest import MIN_IFC_SIZE, ifc_bytes
 
 ORIGIN = "http://localhost:5173"
 
@@ -43,7 +43,6 @@ def live_url(tmp_path_factory):
         **os.environ,
         "DATABASE_URL": f"sqlite:///{db_path}",
         "APP_ENV": "test",
-        "PROCESSING_DELAY_SECONDS": "0",  # don't make the poll wait the real 5s
     }
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(port), "--log-level", "warning"],
@@ -110,13 +109,13 @@ class TestOverRealHttp:
         uploaded = httpx.post(
             f"{live_url}/api/projects/{project_id}/designs",
             data={"name": "Ward A"},
-            files={"file": ("ward-a.ifc", ifc_bytes(4096), "application/octet-stream")},
+            files={"file": ("ward-a.ifc", ifc_bytes(MIN_IFC_SIZE + 96), "application/octet-stream")},
             headers=headers,
             timeout=30,
         )
         assert uploaded.status_code == 201
         design = uploaded.json()
-        assert design["fileSize"] == 4096
+        assert design["fileSize"] == MIN_IFC_SIZE + 96
         assert design["status"] == "PROCESSING"  # extraction runs in the background
 
         # Poll status until the out-of-process worker settles the design. (Unlike
@@ -158,7 +157,7 @@ class TestOverRealHttp:
             httpx.post(
                 f"{live_url}/api/projects/{project['projectId']}/designs",
                 data={"name": f"D{i}"},
-                files={"file": (f"d{i}.ifc", ifc_bytes(1000 + i), "application/octet-stream")},
+                files={"file": (f"d{i}.ifc", ifc_bytes(MIN_IFC_SIZE + i), "application/octet-stream")},
                 timeout=30,
             )
 
@@ -195,7 +194,7 @@ class TestOverRealHttp:
             res = httpx.post(
                 f"{live_url}/api/projects/{project['projectId']}/designs",
                 data={"name": f"D{i}"},
-                files={"file": (f"d{i}.ifc", ifc_bytes(2000 + i), "application/octet-stream")},
+                files={"file": (f"d{i}.ifc", ifc_bytes(MIN_IFC_SIZE + i), "application/octet-stream")},
                 timeout=30,
             )
             statuses.append(res.status_code)
