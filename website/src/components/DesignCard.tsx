@@ -27,23 +27,17 @@ import {
 } from '@tabler/icons-react';
 import { useDeleteDesign, useDesignModules } from '../data/designs/hooks';
 import type { Design, Module } from '../data/designs/types';
-import { unitAbbr } from '../lib/units';
+import { formatDimensions } from '../lib/units';
 import { StatusBadge } from './StatusBadge';
 import { DesignInfoModal } from './DesignInfoModal';
 import { EditModuleModal } from './EditModuleModal';
+import { ModulePreviewModal } from './ModulePreviewModal';
 import { RenameDesignModal } from './RenameDesignModal';
 import classes from './Card.module.css';
 
 interface Props {
   design: Design;
   projectId: string;
-}
-
-function dims(m: Module): string | null {
-  if (!m.dimensions) return null;
-  const { x, y, z } = m.dimensions;
-  const unit = unitAbbr(m.unitScale);
-  return `${x} × ${y} × ${z}${unit ? ` ${unit}` : ''}`;
 }
 
 /** One labelled metadata line inside a module tile. */
@@ -61,8 +55,16 @@ function MetaLine({ label, value }: { label: string; value: string }) {
 }
 
 /** A single module rendered with all of its metadata, plus per-module actions. */
-function ModuleTile({ module, onEdit }: { module: Module; onEdit: () => void }) {
-  const d = dims(module);
+function ModuleTile({
+  module,
+  onEdit,
+  onPreview,
+}: {
+  module: Module;
+  onEdit: () => void;
+  onPreview: () => void;
+}) {
+  const d = formatDimensions(module.dimensions, module.unitScale);
   return (
     <Paper withBorder radius="sm" p="sm">
       <Group justify="space-between" gap="xs" wrap="nowrap" mb={6}>
@@ -80,14 +82,12 @@ function ModuleTile({ module, onEdit }: { module: Module; onEdit: () => void }) 
               <IconPencil size={16} />
             </ActionIcon>
           </Tooltip>
-          {/* Placeholder for the upcoming 3D module preview. */}
-          <Tooltip label="3D preview — coming soon" withArrow>
+          <Tooltip label="Preview in 3D" withArrow>
             <ActionIcon
               variant="subtle"
               color="gray"
-              aria-label="Preview module in 3D"
-              data-disabled
-              onClick={(e) => e.preventDefault()}
+              aria-label={`Preview ${module.type ?? 'module'} in 3D`}
+              onClick={onPreview}
             >
               <IconCube size={16} />
             </ActionIcon>
@@ -108,6 +108,7 @@ export function DesignCard({ design, projectId }: Props) {
   const [renameOpened, renameModal] = useDisclosure(false);
   const [infoOpened, infoModal] = useDisclosure(false);
   const [editModule, setEditModule] = useState<Module | null>(null);
+  const [previewModule, setPreviewModule] = useState<Module | null>(null);
 
   const confirmDelete = () =>
     modals.openConfirmModal({
@@ -244,6 +245,7 @@ export function DesignCard({ design, projectId }: Props) {
                     key={m.moduleId}
                     module={m}
                     onEdit={() => setEditModule(m)}
+                    onPreview={() => setPreviewModule(m)}
                   />
                 ))}
               </SimpleGrid>
@@ -275,6 +277,14 @@ export function DesignCard({ design, projectId }: Props) {
           designId={design.designId}
           opened={editModule !== null}
           onClose={() => setEditModule(null)}
+        />
+      )}
+
+      {previewModule && (
+        <ModulePreviewModal
+          module={previewModule}
+          opened={previewModule !== null}
+          onClose={() => setPreviewModule(null)}
         />
       )}
     </>

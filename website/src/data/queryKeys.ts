@@ -5,4 +5,6 @@ export const queryKeys = {
     ['designs', 'project', projectId] as const,
   designModules: (designId: string) =>
     ['designs', designId, 'modules'] as const,
+  moduleObjectUrl: (moduleId: string) =>
+    ['objects', moduleId, 'url'] as const,
 };
