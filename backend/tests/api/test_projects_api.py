@@ -12,8 +12,18 @@ from datetime import datetime
 
 import pytest
 
+from app.db import SessionLocal
+from app.modules.models import Module
 from app.projects import repository as projects_repo
 from conftest import PROJECT_FIELDS
+
+
+def _attach_module(design_id: str, module_id: str) -> None:
+    """Give a design a module without going through extraction, so tests about
+    what a delete removes don't inherit whatever the processor happens to emit."""
+    with SessionLocal() as session:
+        session.add(Module(module_id=module_id, design_id=design_id, type="HEADWALL"))
+        session.commit()
 
 
 class TestListProjects:
@@ -193,3 +203,148 @@ class TestRenameProject:
         )
         names = {p["projectId"]: p["name"] for p in client.get("/api/projects/all_projects").json()}
         assert names[other["projectId"]] == "Bay St. Office"
+
+
+class TestDeleteProject:
+    """Deleting a project takes everything under it: its designs, their modules,
+    and every blob those designs own."""
+
+    def test_returns_204_with_no_body(self, client, project):
+        res = client.delete(f"/api/projects/{project['projectId']}")
+        assert res.status_code == 204
+        assert res.content == b""
+
+    def test_disappears_from_the_listing(self, client, project):
+        client.delete(f"/api/projects/{project['projectId']}")
+        assert client.get("/api/projects/all_projects").json() == []
+
+    def test_an_empty_project_deletes_too(self, client, make_project):
+        empty = make_project(name="Nothing Uploaded")
+        assert client.delete(f"/api/projects/{empty['projectId']}").status_code == 204
+
+    def test_takes_its_designs_with_it(self, client, project, upload_design):
+        created = upload_design(project["projectId"])
+        client.delete(f"/api/projects/{project['projectId']}")
+        assert client.get(f"/api/designs/{created['designId']}").status_code == 404
+        assert client.get(f"/api/projects/{project['projectId']}/designs").status_code == 404
+
+    def test_takes_the_designs_modules_with_it(self, client, project, upload_design):
+        created = upload_design(project["projectId"])
+        # Attached directly rather than waiting for extraction to emit one: this
+        # test is about the delete reaching the third level, and depending on the
+        # processor's output would make it vacuous whenever that output is empty.
+        _attach_module(created["designId"], "mod_cascade")
+        client.delete(f"/api/projects/{project['projectId']}")
+        res = client.patch("/api/modules/mod_cascade", json={"type": "X"})
+        assert res.status_code == 404
+
+    def test_takes_every_designs_blobs_with_it(self, client, project, upload_design):
+        """Blobs are keyed per design, not per project — each design's prefix has
+        to be wiped separately or its source IFC and module GLBs are orphaned in
+        the bucket forever."""
+        from app import blob
+
+        store = blob.get_blob_store()
+        designs = [
+            upload_design(project["projectId"], name="One", filename="one.ifc"),
+            upload_design(project["projectId"], name="Two", filename="two.ifc"),
+        ]
+        client.delete(f"/api/projects/{project['projectId']}")
+        for d in designs:
+            with pytest.raises(LookupError):
+                store.source_ref(d["designId"])
+            assert store.delete_prefix(blob.design_prefix(d["designId"])) == 0
+
+    def test_leaves_another_projects_blobs_alone(self, client, make_project, upload_design):
+        from app import blob
+
+        store = blob.get_blob_store()
+        keep = make_project(name="Keep")
+        drop = make_project(name="Drop")
+        kept = upload_design(keep["projectId"], name="Keep", filename="keep.ifc")
+        upload_design(drop["projectId"], name="Drop", filename="drop.ifc")
+        client.delete(f"/api/projects/{drop['projectId']}")
+        assert store.source_ref(kept["designId"]).endswith("/keep.ifc")
+
+    def test_blob_cleanup_failure_still_deletes_the_project(
+        self, client, project, upload_design, monkeypatch
+    ):
+        """Storage is best-effort on the way out: the rows are already gone, so a
+        failed wipe leaves orphans (recoverable) rather than a failed request."""
+        from app import blob
+
+        upload_design(project["projectId"])
+
+        def _boom(_prefix):
+            raise RuntimeError("gcs down")
+
+        monkeypatch.setattr(blob.get_blob_store(), "delete_prefix", _boom)
+        assert client.delete(f"/api/projects/{project['projectId']}").status_code == 204
+        assert client.get("/api/projects/all_projects").json() == []
+
+    def test_leaves_another_projects_designs_alone(self, client, make_project, upload_design):
+        keep = make_project(name="Keep")
+        drop = make_project(name="Drop")
+        kept = upload_design(keep["projectId"])
+        upload_design(drop["projectId"])
+        client.delete(f"/api/projects/{drop['projectId']}")
+        assert client.get(f"/api/designs/{kept['designId']}").status_code == 200
+
+    def test_frees_the_name_for_reuse(self, client, make_project):
+        project = make_project(name="Riverside Clinic")
+        client.delete(f"/api/projects/{project['projectId']}")
+        res = client.post(
+            "/api/projects", json={"name": "Riverside Clinic", "location": "Elsewhere"}
+        )
+        assert res.status_code == 201
+
+    def test_unknown_project_is_404(self, client):
+        res = client.delete("/api/projects/prj_missing")
+        assert res.status_code == 404
+        assert res.json()["message"]
+
+    def test_deleting_twice_is_404(self, client, project):
+        client.delete(f"/api/projects/{project['projectId']}")
+        res = client.delete(f"/api/projects/{project['projectId']}")
+        assert res.status_code == 404
+        assert res.json()["message"]
+
+    def test_is_409_while_a_design_is_processing(
+        self, client, project, upload_design, mark_processing
+    ):
+        """The worker settles the design and writes its GLBs after the request
+        returns — deleting the project underneath it loses that write and strands
+        whatever it was still producing."""
+        created = upload_design(project["projectId"])
+        mark_processing(created["designId"])
+        res = client.delete(f"/api/projects/{project['projectId']}")
+        assert res.status_code == 409
+        assert res.json()["message"]
+
+    def test_a_rejected_delete_leaves_everything_intact(
+        self, client, project, upload_design, mark_processing
+    ):
+        from app import blob
+
+        store = blob.get_blob_store()
+        created = upload_design(project["projectId"])
+        mark_processing(created["designId"])
+        client.delete(f"/api/projects/{project['projectId']}")
+        assert client.get("/api/projects/all_projects").json()[0]["designCount"] == 1
+        assert client.get(f"/api/designs/{created['designId']}").status_code == 200
+        assert store.source_ref(created["designId"])
+
+    def test_succeeds_once_processing_settles(self, client, project, upload_design):
+        """The block is temporary — a project whose designs have all settled
+        deletes normally."""
+        upload_design(project["projectId"])  # settles COMPLETE under the TestClient
+        assert client.delete(f"/api/projects/{project['projectId']}").status_code == 204
+
+    def test_a_design_processing_elsewhere_does_not_block(
+        self, client, make_project, upload_design, mark_processing
+    ):
+        keep = make_project(name="Busy")
+        drop = make_project(name="Idle")
+        busy = upload_design(keep["projectId"])
+        mark_processing(busy["designId"])
+        assert client.delete(f"/api/projects/{drop['projectId']}").status_code == 204

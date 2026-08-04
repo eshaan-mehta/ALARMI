@@ -62,6 +62,18 @@ def create_project(db: Session, name: str, location: str) -> ProjectOut:
     return to_project_out(db, p)
 
 
+def processing_design_count(db: Session, project_id: str) -> int:
+    """Designs still being extracted. A project can't be deleted while any exist:
+    the worker settles the design's status and writes its GLBs *after* the
+    request returns, so deleting underneath it loses that write and strands the
+    blobs it is still producing."""
+    return db.scalar(
+        select(func.count())
+        .select_from(Design)
+        .where(Design.project_id == project_id, Design.status == "PROCESSING")
+    )
+
+
 def rename_project(db: Session, project_id: str, new_name: str) -> ProjectOut | None:
     p = db.get(Project, project_id)
     if p is None:
@@ -70,3 +82,18 @@ def rename_project(db: Session, project_id: str, new_name: str) -> ProjectOut | 
     db.commit()
     db.refresh(p)
     return to_project_out(db, p)
+
+
+def delete_project(db: Session, project_id: str) -> list[str] | None:
+    """Deletes a project and everything under it.
+
+    Returns the ids of the designs that went with it — blobs are keyed per
+    design, so the caller needs them to clean storage — or ``None`` if the
+    project doesn't exist."""
+    p = db.get(Project, project_id)
+    if p is None:
+        return None
+    design_ids = [d.design_id for d in p.designs]
+    db.delete(p)  # cascade removes the designs, then their modules
+    db.commit()
+    return design_ids

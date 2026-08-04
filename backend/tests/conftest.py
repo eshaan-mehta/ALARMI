@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, SessionLocal, engine, init_db  # noqa: E402
+from app.designs.models import Design  # noqa: E402
 from app.main import app  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -173,6 +174,23 @@ def upload_design(client):
         return client.get(f"/api/designs/{res.json()['designId']}").json()
 
     return _upload
+
+
+@pytest.fixture
+def mark_processing():
+    """Force a settled design back to PROCESSING.
+
+    The in-process TestClient runs the background job before the upload call
+    returns, so no design is ever *caught* mid-extraction — the only way to
+    exercise the paths that care about an in-flight design is to put one there.
+    """
+
+    def _mark(design_id: str) -> None:
+        with SessionLocal() as session:
+            session.get(Design, design_id).status = "PROCESSING"
+            session.commit()
+
+    return _mark
 
 
 @pytest.fixture

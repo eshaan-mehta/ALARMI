@@ -32,3 +32,11 @@ export async function renameProject(projectId: string, newName: string): Promise
   );
   return data;
 }
+
+/**
+ * DELETE /api/projects/{projectId} — removes the project, every design in it,
+ * and those designs' modules. 409s if any design is still processing.
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  await http.delete(`/projects/${projectId}`);
+}
