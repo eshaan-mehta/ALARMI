@@ -54,7 +54,6 @@ uv run dev --reset --seed   # wipe the DB, re-seed, then run (clean slate)
 |-----|---------|---------|
 | `DATABASE_URL` | `sqlite:///./alarmi.db` | Metadata store. Set to the Azure SQL connection string when deployed |
 | `APP_ENV` | `local` | `local` \| `azure` (informational) |
-| `PROCESSING_DELAY_SECONDS` | `5` | How long the stub extractor pretends to work before a design flips to `COMPLETE`. Tests set it to `0` |
 
 No `.env` needed for local dev — copy `.env.example` only to override.
 

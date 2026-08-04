@@ -9,11 +9,9 @@ Run just this file to see the outstanding spec surface:
     uv run pytest tests/spec -rxX
 """
 
-import time
-
 import pytest
 
-from conftest import ifc_bytes
+from conftest import MIN_IFC_SIZE, ifc_bytes
 
 pytestmark = pytest.mark.deferred
 
@@ -25,7 +23,7 @@ def _project_with_design(client):
     design = client.post(
         f"/api/projects/{project['projectId']}/designs",
         data={"name": "Spec design"},
-        files={"file": ("spec.ifc", ifc_bytes(2048), "application/octet-stream")},
+        files={"file": ("spec.ifc", ifc_bytes(), "application/octet-stream")},
     ).json()
     return project, design
 
@@ -73,32 +71,34 @@ class TestMobileEndpoints:
 
 
 class TestRealProcessing:
-    """FS4/FS5 + §3.2.3 — the processor is a stub today: it fabricates modules
-    from the file size and never opens the file."""
+    """FS4/FS5 + §3.2.3 — the processor parses the file for real now, but it
+    merges the whole design into one module instead of splitting it the way the
+    design doc specifies, and stores only part of Table 5."""
 
-    @pytest.mark.xfail(reason="Uploaded IFC bytes are discarded — no blob storage yet (FS4)", strict=False)
+    @pytest.mark.xfail(reason="Bytes are retained in blob storage, but no endpoint serves them back (FS4)", strict=False)
     def test_the_uploaded_file_is_retained(self, client):
         _, design = _project_with_design(client)
         res = client.get(f"/api/designs/{design['designId']}/file")
         assert res.status_code == 200
         assert res.content.startswith(b"ISO-10303-21;")
 
-    @pytest.mark.xfail(reason="Stub processor fabricates modules from file size", strict=False)
+    @pytest.mark.xfail(reason="Every renderable element is merged into one module — the flag is ignored", strict=False)
     def test_a_file_with_no_marked_modules_yields_no_modules(self, client):
         """§3.2.3: modules come from elements carrying
-        `FloorMark.IsMarkingModule`. A file with none must extract none."""
+        `FloorMark.IsMarkingModule`. A file with none must extract none — the
+        sample carries a wall and a door, neither of them flagged."""
         project = client.post(
-            "/api/projects", json={"name": "Empty IFC", "location": "X"}
+            "/api/projects", json={"name": "Unflagged IFC", "location": "X"}
         ).json()
         design = client.post(
             f"/api/projects/{project['projectId']}/designs",
             data={"name": "No modules"},
-            files={"file": ("empty.ifc", ifc_bytes(2048), "application/octet-stream")},
+            files={"file": ("unflagged.ifc", ifc_bytes(), "application/octet-stream")},
         ).json()
         assert design["moduleCount"] == 0
         assert client.get(f"/api/designs/{design['designId']}/modules").json() == []
 
-    @pytest.mark.xfail(reason="Stub processor does not parse the file", strict=False)
+    @pytest.mark.xfail(reason="Module ids are server-minted (mod_…), not read off the elements", strict=False)
     def test_module_ids_come_from_the_ifc_global_ids(self, client):
         """Table 5: ModuleID is `IfcElement.GlobalId` (22-char IFC GUID), not a
         server-minted id — the mobile app and the authoring tool have to agree
@@ -118,21 +118,8 @@ class TestRealProcessing:
 
     # test_processing_is_asynchronous graduated → tests/api/test_upload_api.py
     #   (upload returns PROCESSING immediately; a background worker settles it).
-
-    @pytest.mark.xfail(reason="No failure path — the stub always succeeds", strict=False)
-    def test_an_unparseable_file_ends_in_error(self, client):
-        """FS2 lists "failed" as a status the user must see."""
-        project = client.post("/api/projects", json={"name": "Bad", "location": "X"}).json()
-        design = client.post(
-            f"/api/projects/{project['projectId']}/designs",
-            data={"name": "Corrupt"},
-            files={"file": ("corrupt.ifc", b"this is not an IFC file", "application/octet-stream")},
-        ).json()
-        deadline = time.monotonic() + 5
-        status = design["status"]
-        while status == "PROCESSING" and time.monotonic() < deadline:
-            status = client.get(f"/api/designs/{design['designId']}/status").json()["status"]
-        assert status == "ERROR"
+    # test_an_unparseable_file_ends_in_error graduated → tests/api/test_upload_api.py
+    #   (the processor opens the file, so a corrupt one now settles as ERROR).
 
 
 class TestOperationalGaps:
@@ -148,7 +135,7 @@ class TestOperationalGaps:
         res = client.post(
             f"/api/projects/{project['projectId']}/designs",
             data={"name": "Huge"},
-            files={"file": ("huge.ifc", ifc_bytes(4096), "application/octet-stream")},
+            files={"file": ("huge.ifc", ifc_bytes(), "application/octet-stream")},
             headers={"X-Expect-Early-Rejection": "1"},
         )
         assert res.status_code == 413
@@ -160,7 +147,7 @@ class TestOperationalGaps:
             client.post(
                 f"/api/projects/{project['projectId']}/designs",
                 data={"name": f"D{i}"},
-                files={"file": (f"d{i}.ifc", ifc_bytes(300 + i), "application/octet-stream")},
+                files={"file": (f"d{i}.ifc", ifc_bytes(MIN_IFC_SIZE + i), "application/octet-stream")},
             )
         res = client.get(f"/api/projects/{project['projectId']}/designs", params={"limit": 2})
         assert len(res.json()) == 2

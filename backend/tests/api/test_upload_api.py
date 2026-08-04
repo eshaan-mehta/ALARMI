@@ -100,25 +100,54 @@ class TestAsyncProcessing:
         status = client.get(f"/api/designs/{created['designId']}/status").json()["status"]
         assert status == "COMPLETE"
 
-    def test_the_source_is_handed_to_blob_storage(self, client, project, monkeypatch):
+    def test_a_corrupt_file_settles_to_error(self, client, project):
+        """FS2 lists "failed" as a status the user must see. The processor opens
+        the file for real, so bytes that aren't an IFC can't come back COMPLETE."""
+        created = _post(
+            client, project["projectId"], content=b"this is not an IFC file"
+        ).json()
+        assert client.get(
+            f"/api/designs/{created['designId']}/status"
+        ).json()["status"] == "ERROR"
+
+    def test_a_failed_design_reports_no_modules(self, client, project):
+        created = _post(client, project["projectId"], content=b"not an IFC").json()
+        assert client.get(f"/api/designs/{created['designId']}/modules").json() == []
+        assert client.get(f"/api/designs/{created['designId']}").json()["moduleCount"] == 0
+
+    def test_the_source_is_handed_to_blob_storage(self, client, project):
         """The uploaded bytes are written to object storage under the design's
-        source key (the fake store drops them; a real one keeps them)."""
+        source key — where the worker then reads them back from."""
         from app import blob
 
-        put_keys: list[str] = []
-        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
-        created = _post(client, project["projectId"]).json()
-        assert blob.source_key(created["designId"], "ward-a.ifc") in put_keys
+        payload = ifc_bytes()
+        created = _post(client, project["projectId"], content=payload).json()
+        stored = blob.get_blob_store().get(
+            blob.source_key(created["designId"], "ward-a.ifc")
+        )
+        assert stored == payload
 
-    def test_the_source_keeps_the_uploaded_filename(self, client, project, monkeypatch):
+    def test_the_source_keeps_the_uploaded_filename(self, client, project):
         """The bucket listing should read like the user's uploads, so the key
         carries the original name rather than a fixed 'source.ifc'."""
         from app import blob
 
-        put_keys: list[str] = []
-        monkeypatch.setattr(blob.get_blob_store(), "put", lambda key, data: put_keys.append(key))
         created = _post(client, project["projectId"], filename="Ward A Rev 2.ifc").json()
-        assert f"designs/{created['designId']}/Ward A Rev 2.ifc" in put_keys
+        assert blob.get_blob_store().source_ref(created["designId"]) == (
+            f"designs/{created['designId']}/Ward A Rev 2.ifc"
+        )
+
+    def test_the_extracted_glb_lands_in_blob_storage(self, client, project):
+        """What /objects/get_url points the AR viewer at: a real glTF binary
+        under the module's key, not the empty placeholder the stub published."""
+        from app import blob
+
+        created = _post(client, project["projectId"]).json()
+        module = client.get(f"/api/designs/{created['designId']}/modules").json()[0]
+        glb = blob.get_blob_store().get(
+            blob.glb_key(created["designId"], module["moduleId"])
+        )
+        assert glb.startswith(b"glTF")
 
 
 class TestUploadedFilenamesInStorage:

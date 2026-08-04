@@ -9,17 +9,19 @@ from app.designs.models import Design
 from app.modules.models import Module
 from app.processing.worker import run_job
 from app.projects import repository as projects_repo
-from conftest import DESIGN_FIELDS, STATUSES
+from conftest import DESIGN_FIELDS, MIN_IFC_SIZE, STATUSES, store_source
 
 
 def _project(db, name="P", location="Waterloo, ON") -> str:
     return projects_repo.create_project(db, name, location).projectId
 
 
-def _processed(db, project_id, name="A", file_name="a.ifc", size=1024):
+def _processed(db, project_id, name="A", file_name="a.ifc"):
     """Create a design and run its (async) processing to completion, the way an
-    upload does. Returns the settled DesignOut, with its modules attached."""
-    created = repo.create_design(db, project_id, name, file_name, size)
+    upload does: store the source, then work it. Returns the settled DesignOut,
+    with its modules attached."""
+    created = repo.create_design(db, project_id, name, file_name, MIN_IFC_SIZE)
+    store_source(created.designId, file_name)
     run_job(created.designId)
     db.expire_all()
     return repo.get_design(db, created.designId)
@@ -132,8 +134,8 @@ class TestListModules:
 
     def test_scoped_to_one_design(self, db):
         project_id = _project(db)
-        one = _processed(db, project_id, "One", "1.ifc", 1024)
-        two = _processed(db, project_id, "Two", "2.ifc", 2048)
+        one = _processed(db, project_id, "One", "1.ifc")
+        two = _processed(db, project_id, "Two", "2.ifc")
         ids_one = {m.moduleId for m in repo.list_modules(db, one.designId)}
         ids_two = {m.moduleId for m in repo.list_modules(db, two.designId)}
         assert ids_one.isdisjoint(ids_two)
@@ -189,8 +191,8 @@ class TestDeleteDesign:
 
     def test_leaves_other_designs_alone(self, db):
         project_id = _project(db)
-        keep = _processed(db, project_id, "Keep", "k.ifc", 1024)
-        drop = _processed(db, project_id, "Drop", "d.ifc", 2048)
+        keep = _processed(db, project_id, "Keep", "k.ifc")
+        drop = _processed(db, project_id, "Drop", "d.ifc")
         repo.delete_design(db, drop.designId)
         assert repo.get_design(db, keep.designId) is not None
         assert len(repo.list_modules(db, keep.designId)) == keep.moduleCount >= 1
