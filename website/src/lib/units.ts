@@ -33,6 +33,21 @@ export function unitAbbr(unit: string | undefined): string {
   return UNIT_ABBR[unit] ?? unit.toLowerCase();
 }
 
+/**
+ * A module's bounding dimensions as one display string, e.g. "2 × 2.4 × 0.15 m",
+ * or null when the module has none. Takes the parts rather than a Module so the
+ * unit helpers stay independent of the API types.
+ */
+export function formatDimensions(
+  dimensions: { x: number; y: number; z: number } | undefined,
+  unitScale: string | undefined,
+): string | null {
+  if (!dimensions) return null;
+  const { x, y, z } = dimensions;
+  const unit = unitAbbr(unitScale);
+  return `${x} × ${y} × ${z}${unit ? ` ${unit}` : ''}`;
+}
+
 /** Convert a length from one unit to another; trims float noise to 4 decimals. */
 export function convertLength(value: number, from: string, to: string): number {
   const f = METRES_PER_UNIT[from];
