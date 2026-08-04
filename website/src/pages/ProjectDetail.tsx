@@ -1,28 +1,36 @@
 import {
+  ActionIcon,
   Alert,
   Anchor,
   Button,
   Center,
   Container,
   Group,
+  Menu,
   Skeleton,
   Stack,
   Text,
   ThemeIcon,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { modals } from '@mantine/modals';
+import { notifications } from '@mantine/notifications';
 import {
   IconAlertTriangle,
   IconArrowLeft,
   IconCloudUpload,
+  IconDots,
+  IconTrash,
   IconUpload,
 } from '@tabler/icons-react';
-import { Link, useParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DesignCard } from '../components/DesignCard';
 import { UploadModal } from '../components/UploadModal';
 import { useProjectDesigns } from '../data/designs/hooks';
-import { useProject } from '../data/projects/hooks';
+import { useDeleteProject, useProject } from '../data/projects/hooks';
 
 export function ProjectDetail() {
   const { projectId = '' } = useParams();
@@ -35,9 +43,55 @@ export function ProjectDetail() {
     refetch,
   } = useProjectDesigns(projectId);
   const [modalOpened, modal] = useDisclosure(false);
+  const navigate = useNavigate();
+  const del = useDeleteProject();
 
   // The projects list resolved but no project has this id.
   const notFound = projectsLoaded && !project;
+
+  // The backend refuses to delete a project while extraction is still running,
+  // so the action is held back until every design has settled. This list polls
+  // every 2s while anything is processing, so it re-enables on its own.
+  const processing = designs?.some((d) => d.status === 'PROCESSING') ?? false;
+  const blocked = processing || del.isPending;
+  const designCount = designs?.length ?? 0;
+
+  const confirmDelete = () =>
+    modals.openConfirmModal({
+      title: 'Delete project',
+      centered: true,
+      children: (
+        <Text size="sm">
+          Delete “{project?.name}”? This permanently removes the project and
+          {designCount === 1 ? ' its design' : ` all ${designCount} of its designs`},
+          including every uploaded file and extracted module. This can&apos;t be
+          undone.
+        </Text>
+      ),
+      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () =>
+        del.mutate(projectId, {
+          onSuccess: () => {
+            notifications.show({
+              color: 'gray',
+              title: 'Project deleted',
+              message: `“${project?.name}” and its designs were removed.`,
+            });
+            navigate('/projects'); // this page no longer exists
+          },
+          // Covers the 409 raised when a design started processing after the
+          // list last polled.
+          onError: (err) =>
+            notifications.show({
+              color: 'red',
+              title: "Couldn't delete project",
+              message: isAxiosError(err)
+                ? (err.response?.data?.message ?? 'Please try again.')
+                : 'Please try again.',
+            }),
+        }),
+    });
 
   return (
     <Container size="lg" py="xl">
@@ -81,11 +135,45 @@ export function ProjectDetail() {
                 design{designs?.length === 1 ? '' : 's'}
               </Text>
             </div>
-            {designs && designs.length > 0 && (
-              <Button leftSection={<IconUpload size={18} />} onClick={modal.open}>
-                Upload
-              </Button>
-            )}
+            <Group gap="xs">
+              {designs && designs.length > 0 && (
+                <Button leftSection={<IconUpload size={18} />} onClick={modal.open}>
+                  Upload
+                </Button>
+              )}
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <ActionIcon variant="subtle" color="gray" aria-label="Project actions">
+                    <IconDots size={18} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Tooltip
+                    label="Wait for processing to finish"
+                    disabled={!blocked}
+                    position="left"
+                  >
+                    {/* data-disabled, not disabled: a truly disabled button emits
+                        no mouse events, so the tooltip explaining why would never
+                        open. The click is turned away by hand instead. */}
+                    <Menu.Item
+                      color="red"
+                      data-disabled={blocked || undefined}
+                      leftSection={<IconTrash size={16} />}
+                      onClick={(event) => {
+                        if (blocked) {
+                          event.preventDefault();
+                          return;
+                        }
+                        confirmDelete();
+                      }}
+                    >
+                      Delete project
+                    </Menu.Item>
+                  </Tooltip>
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
           </Group>
 
           {isLoading && (

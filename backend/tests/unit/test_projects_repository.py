@@ -10,12 +10,13 @@ from datetime import datetime
 import pytest
 
 from app.designs.models import Design
+from app.modules.models import Module
 from app.projects import repository as repo
 from app.projects.models import Project
 from conftest import PROJECT_FIELDS
 
 
-def _add_design(db, project_id: str, design_id: str) -> None:
+def _add_design(db, project_id: str, design_id: str, status: str = "COMPLETE") -> None:
     db.add(
         Design(
             design_id=design_id,
@@ -23,10 +24,15 @@ def _add_design(db, project_id: str, design_id: str) -> None:
             name=design_id,
             file_name=f"{design_id}.ifc",
             file_size=100,
-            status="COMPLETE",
+            status=status,
             upload_time="2026-01-01T00:00:00+00:00",
         )
     )
+    db.commit()
+
+
+def _add_module(db, design_id: str, module_id: str) -> None:
+    db.add(Module(module_id=module_id, design_id=design_id, type="HEADWALL"))
     db.commit()
 
 
@@ -120,6 +126,78 @@ class TestRenameProject:
         project = repo.create_project(db, "Old", "X")
         repo.rename_project(db, project.projectId, "New")
         assert db.get(Project, project.projectId).name == "New"
+
+
+class TestProcessingDesignCount:
+    def test_zero_when_nothing_is_in_flight(self, db):
+        project = repo.create_project(db, "A", "X")
+        _add_design(db, project.projectId, "dsn_1")
+        assert repo.processing_design_count(db, project.projectId) == 0
+
+    def test_counts_only_processing_designs(self, db):
+        project = repo.create_project(db, "A", "X")
+        _add_design(db, project.projectId, "dsn_done")
+        _add_design(db, project.projectId, "dsn_failed", status="ERROR")
+        _add_design(db, project.projectId, "dsn_busy", status="PROCESSING")
+        assert repo.processing_design_count(db, project.projectId) == 1
+
+    def test_is_scoped_to_one_project(self, db):
+        """A design processing elsewhere must not block this project's delete."""
+        a = repo.create_project(db, "A", "X")
+        b = repo.create_project(db, "B", "Y")
+        _add_design(db, b.projectId, "dsn_busy", status="PROCESSING")
+        assert repo.processing_design_count(db, a.projectId) == 0
+        assert repo.processing_design_count(db, b.projectId) == 1
+
+
+class TestDeleteProject:
+    def test_removes_the_project_row(self, db):
+        project = repo.create_project(db, "A", "X")
+        assert repo.delete_project(db, project.projectId) == []
+        assert db.get(Project, project.projectId) is None
+
+    def test_returns_the_ids_of_the_designs_it_took(self, db):
+        """The caller wipes blob storage per design prefix, so the ids have to
+        come back out — after the delete there is nothing left to look them up
+        from."""
+        project = repo.create_project(db, "A", "X")
+        _add_design(db, project.projectId, "dsn_1")
+        _add_design(db, project.projectId, "dsn_2")
+        assert sorted(repo.delete_project(db, project.projectId)) == ["dsn_1", "dsn_2"]
+
+    def test_takes_its_designs_and_their_modules_with_it(self, db):
+        project = repo.create_project(db, "A", "X")
+        _add_design(db, project.projectId, "dsn_1")
+        _add_module(db, "dsn_1", "mod_1")
+        repo.delete_project(db, project.projectId)
+        assert db.get(Design, "dsn_1") is None
+        assert db.get(Module, "mod_1") is None
+
+    def test_leaves_other_projects_alone(self, db):
+        a = repo.create_project(db, "A", "X")
+        b = repo.create_project(db, "B", "Y")
+        _add_design(db, a.projectId, "dsn_a")
+        _add_design(db, b.projectId, "dsn_b")
+        _add_module(db, "dsn_b", "mod_b")
+        repo.delete_project(db, a.projectId)
+        assert db.get(Project, b.projectId) is not None
+        assert db.get(Design, "dsn_b") is not None
+        assert db.get(Module, "mod_b") is not None
+
+    def test_returns_none_for_an_unknown_id(self, db):
+        assert repo.delete_project(db, "prj_missing") is None
+
+    def test_drops_it_from_the_listing(self, db):
+        project = repo.create_project(db, "A", "X")
+        repo.delete_project(db, project.projectId)
+        assert repo.list_projects(db) == []
+
+    def test_frees_the_name_for_reuse(self, db):
+        """Names are unique, so a deleted project must not keep reserving one."""
+        project = repo.create_project(db, "Riverside Clinic", "X")
+        repo.delete_project(db, project.projectId)
+        assert repo.project_name_exists(db, "Riverside Clinic") is False
+        assert repo.create_project(db, "Riverside Clinic", "Y") is not None
 
 
 class TestToProjectOut:

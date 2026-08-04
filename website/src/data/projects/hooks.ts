@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
-import { createProject, getAllProjects, renameProject, type CreateProjectArgs } from './api';
+import {
+  createProject,
+  deleteProject,
+  getAllProjects,
+  renameProject,
+  type CreateProjectArgs,
+} from './api';
 
 export function useProjects() {
   return useQuery({
@@ -36,5 +42,21 @@ export function useRenameProject() {
     mutationFn: ({ projectId, newName }: { projectId: string; newName: string }) =>
       renameProject(projectId, newName),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.projects }),
+  });
+}
+
+/**
+ * Deletes a project and everything under it. The design list for that project is
+ * dropped from the cache outright rather than invalidated — the project is gone,
+ * so there is nothing left to refetch.
+ */
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => deleteProject(projectId),
+    onSuccess: (_data, projectId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects });
+      qc.removeQueries({ queryKey: queryKeys.projectDesigns(projectId) });
+    },
   });
 }

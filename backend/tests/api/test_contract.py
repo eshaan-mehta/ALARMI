@@ -73,7 +73,9 @@ class TestErrorShape:
         assert isinstance(res.json().get("message"), str)
 
     def test_a_wrong_method_carries_a_message(self, client, project):
-        res = client.delete(f"/api/projects/{project['projectId']}")
+        # PUT, not DELETE: the path now serves PATCH (rename) and DELETE, so PUT
+        # is the verb left over to prove an unsupported method answers in JSON.
+        res = client.put(f"/api/projects/{project['projectId']}", json={})
         assert res.status_code in (404, 405)
         assert isinstance(res.json().get("message"), str)
 
