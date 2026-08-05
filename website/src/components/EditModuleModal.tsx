@@ -15,13 +15,6 @@ import { useUpdateModule } from '../data/designs/hooks';
 import type { Module, ModulePatch } from '../data/designs/types';
 import { UNIT_SCALE_OPTIONS, convertLength, unitAbbr } from '../lib/units';
 
-const MODULE_TYPE_OPTIONS = [
-  'Wall Panel',
-  'Bathroom Service Wall',
-  'Hospital Headwall',
-  'Utility Panel',
-];
-
 interface Props {
   module: Module;
   designId: string;
@@ -129,12 +122,7 @@ export function EditModuleModal({ module, designId, opened, onClose }: Props) {
     >
       <form onSubmit={handleSubmit}>
         <Stack>
-          <Select
-            label="Type"
-            data={MODULE_TYPE_OPTIONS}
-            searchable
-            {...form.getInputProps('type')}
-          />
+          <TextInput label="Type" {...form.getInputProps('type')} />
           <Group grow>
             <NumberInput
               label={`Width x (${currentUnitAbbr})`}
@@ -144,14 +132,14 @@ export function EditModuleModal({ module, designId, opened, onClose }: Props) {
               {...form.getInputProps('dimX')}
             />
             <NumberInput
-              label={`Height y (${currentUnitAbbr})`}
+              label={`Thickness y (${currentUnitAbbr})`}
               min={0}
               step={0.1}
               decimalScale={4}
               {...form.getInputProps('dimY')}
             />
             <NumberInput
-              label={`Depth z (${currentUnitAbbr})`}
+              label={`Height z (${currentUnitAbbr})`}
               min={0}
               step={0.1}
               decimalScale={4}
